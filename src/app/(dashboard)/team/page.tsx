@@ -2,14 +2,17 @@
 
 import * as React from "react";
 import { useAuth } from "@/components/providers/auth-provider";
-import { useWorkspaces } from "@/hooks/use-workspace";
+import { useCurrentWorkspace } from '@/hooks/use-current-workspace';
 import { useWorkspaceTasks } from "@/hooks/use-task";
 import { useTeamMembers, useUpdateTeamMember, useDeleteTeamMember, ROLE_CONFIG, STATUS_CONFIG, TeamMember } from "@/hooks/use-team";
+import { useHasPermission } from "@/hooks/use-permissions";
+import { Permission } from "@/lib/permissions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { cn } from "@/lib/utils";
 import {
   Table,
   TableBody,
@@ -47,33 +50,38 @@ import { Users, Search, MoreVertical, Mail, Phone, Trash2, Edit } from "lucide-r
 import { toast } from "sonner";
 import { ResourceAllocationCard } from "@/components/team/resource-allocation-card";
 import { AddMembersSection } from "@/components/team/add-members-section";
+import { DeleteMemberDialog } from "@/components/team/delete-member-dialog";
 import { calculateTeamWorkload } from "@/lib/team-workload";
 import { addDays } from "date-fns";
 
 export default function TeamPage() {
   const { user } = useAuth();
-  const { data: workspaces, isLoading: workspacesLoading } = useWorkspaces(user?.$id);
-  const currentWorkspace = workspaces?.[0];
-  
+  const { currentWorkspace, isLoading: workspacesLoading } = useCurrentWorkspace();
+
   const { data: teamMembers = [], isLoading: membersLoading } = useTeamMembers(currentWorkspace?.$id);
   const { data: tasks } = useWorkspaceTasks(currentWorkspace?.$id);
   const updateMember = useUpdateTeamMember();
   const deleteMember = useDeleteTeamMember();
-  
+
+  // Check if user has permission to invite members
+  const canInviteMembers = useHasPermission(Permission.INVITE_MEMBER);
+
   const [searchQuery, setSearchQuery] = React.useState("");
   const [selectedRole, setSelectedRole] = React.useState<string>("ALL");
   const [selectedStatus, setSelectedStatus] = React.useState<string>("ALL");
   const [editingMember, setEditingMember] = React.useState<TeamMember | null>(null);
+  const [memberToDelete, setMemberToDelete] = React.useState<TeamMember | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = React.useState(false);
 
   // Filter team members
   const filteredMembers = React.useMemo(() => {
     return teamMembers.filter((member) => {
       const matchesSearch = member.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                           member.email.toLowerCase().includes(searchQuery.toLowerCase());
+        member.email.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesRole = selectedRole === "ALL" || member.role === selectedRole;
       const matchesStatus = selectedStatus === "ALL" || member.status === selectedStatus;
-      
+
       return matchesSearch && matchesRole && matchesStatus;
     });
   }, [teamMembers, searchQuery, selectedRole, selectedStatus]);
@@ -86,17 +94,17 @@ export default function TeamPage() {
       acc[member.role] = (acc[member.role] || 0) + 1;
       return acc;
     }, {} as Record<string, number>);
-    
+
     return { totalMembers, activeMembers, roleBreakdown };
   }, [teamMembers]);
 
   // Calculate team workload (next 14 days)
   const workloadData = React.useMemo(() => {
     if (!tasks || !teamMembers) return null;
-    
+
     const startDate = new Date();
     const endDate = addDays(startDate, 14);
-    
+
     return calculateTeamWorkload(tasks, teamMembers, startDate, endDate);
   }, [tasks, teamMembers]);
 
@@ -123,7 +131,7 @@ export default function TeamPage() {
         id: editingMember.$id,
         data: updates,
       });
-      
+
       toast.success('Team member updated successfully');
       setIsEditDialogOpen(false);
       setEditingMember(null);
@@ -133,16 +141,23 @@ export default function TeamPage() {
     }
   };
 
-  const handleDeleteMember = async (member: TeamMember) => {
-    if (!confirm(`Are you sure you want to remove ${member.name} from the team?`)) return;
+  const handleDeleteMember = (member: TeamMember) => {
+    setMemberToDelete(member);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDeleteMember = async () => {
+    if (!memberToDelete) return;
 
     try {
       await deleteMember.mutateAsync({
-        id: member.$id,
-        workspaceId: member.workspaceId,
+        id: memberToDelete.$id,
+        workspaceId: memberToDelete.workspaceId,
       });
-      
+
       toast.success('Team member removed successfully');
+      setDeleteDialogOpen(false);
+      setMemberToDelete(null);
     } catch (error) {
       toast.error('Failed to remove team member');
       console.error(error);
@@ -189,9 +204,11 @@ export default function TeamPage() {
 
       {/* Team Management Tabs */}
       <Tabs defaultValue="members" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className={canInviteMembers ? "grid w-full grid-cols-2" : "grid w-full grid-cols-1"}>
           <TabsTrigger value="members">Team Members</TabsTrigger>
-          <TabsTrigger value="add-members">Add Members</TabsTrigger>
+          {canInviteMembers && (
+            <TabsTrigger value="add-members">Add Members</TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="members" className="space-y-6">
@@ -288,85 +305,114 @@ export default function TeamPage() {
                       <TableHead>Status</TableHead>
                       <TableHead>Contact</TableHead>
                       <TableHead>Joined</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
+                      {canInviteMembers && (
+                        <TableHead className="text-right">Actions</TableHead>
+                      )}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredMembers.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={6} className="text-center py-8">
+                        <TableCell colSpan={canInviteMembers ? 6 : 5} className="text-center py-8">
                           <div className="text-muted-foreground">
                             No team members found
                           </div>
                         </TableCell>
                       </TableRow>
                     ) : (
-                      filteredMembers.map((member) => (
-                        <TableRow key={member.$id}>
-                          <TableCell>
-                            <div className="flex items-center gap-3">
-                              <Avatar className="h-10 w-10">
-                                <AvatarImage src={member.avatar} alt={member.name} />
-                                <AvatarFallback>
-                                  {member.name.split(' ').map(n => n[0]).join('').toUpperCase()}
-                                </AvatarFallback>
-                              </Avatar>
-                              <div>
-                                <div className="font-medium">{member.name}</div>
-                                <div className="text-sm text-muted-foreground">{member.email}</div>
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge className={ROLE_CONFIG[member.role].color}>
-                              {ROLE_CONFIG[member.role].label}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Badge className={STATUS_CONFIG[member.status].color}>
-                              {STATUS_CONFIG[member.status].label}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex flex-col gap-1 text-sm">
-                              <div className="flex items-center gap-2 text-muted-foreground">
-                                <Mail className="h-3 w-3" />
-                                {member.email}
-                              </div>
-                              {member.phone && (
-                                <div className="flex items-center gap-2 text-muted-foreground">
-                                  <Phone className="h-3 w-3" />
-                                  {member.phone}
+                      filteredMembers.map((member) => {
+                        const isCurrentUser = member.userId === user?.$id;
+
+                        return (
+                          <TableRow key={member.$id}>
+                            <TableCell>
+                              <div className="flex items-center gap-3">
+                                {/* Avatar with conditional ring for current user */}
+                                <div className={cn(
+                                  "relative",
+                                  isCurrentUser && "p-1 rounded-full bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 shadow-lg shadow-purple-500/50 animate-pulse"
+                                )}>
+                                  <Avatar className={cn(
+                                    "h-10 w-10",
+                                    isCurrentUser && "ring-4 ring-background"
+                                  )}>
+                                    <AvatarImage src={member.avatar} alt={member.name} />
+                                    <AvatarFallback className={cn(
+                                      isCurrentUser && "bg-gradient-to-br from-blue-100 to-purple-100 dark:from-blue-900 dark:to-purple-900 font-bold"
+                                    )}>
+                                      {member.name.split(' ').map(n => n[0]).join('').toUpperCase()}
+                                    </AvatarFallback>
+                                  </Avatar>
                                 </div>
+                                <div>
+                                  <div className="font-medium flex items-center gap-2">
+                                    <span className={cn(isCurrentUser && "font-bold text-primary")}>
+                                      {member.name}
+                                    </span>
+                                    {isCurrentUser && (
+                                      <Badge variant="default" className="text-xs bg-gradient-to-r from-blue-500 to-purple-500 font-semibold">
+                                        You
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <div className="text-sm text-muted-foreground">{member.email}</div>
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge className={ROLE_CONFIG[member.role].color}>
+                                {ROLE_CONFIG[member.role].label}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Badge className={STATUS_CONFIG[member.status].color}>
+                                {STATUS_CONFIG[member.status].label}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex flex-col gap-1 text-sm">
+                                <div className="flex items-center gap-2 text-muted-foreground">
+                                  <Mail className="h-3 w-3" />
+                                  {member.email}
+                                </div>
+                                {member.phone && (
+                                  <div className="flex items-center gap-2 text-muted-foreground">
+                                    <Phone className="h-3 w-3" />
+                                    {member.phone}
+                                  </div>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-muted-foreground">
+                              {new Date(member.$createdAt).toLocaleDateString()}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {/* Only show actions if user has edit/remove permissions */}
+                              {(canInviteMembers) && (
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="sm">
+                                      <MoreVertical className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem onClick={() => handleEditMember(member)}>
+                                      <Edit className="h-4 w-4 mr-2" />
+                                      Edit Member
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleDeleteMember(member)} className="text-red-600">
+                                      <Trash2 className="h-4 w-4 mr-2" />
+                                      Remove Member
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
                               )}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">
-                            {new Date(member.$createdAt).toLocaleDateString()}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="sm">
-                                  <MoreVertical className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={() => handleEditMember(member)}>
-                                  <Edit className="h-4 w-4 mr-2" />
-                                  Edit Member
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => handleDeleteMember(member)} className="text-red-600">
-                                  <Trash2 className="h-4 w-4 mr-2" />
-                                  Remove Member
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </TableCell>
-                        </TableRow>
-                      ))
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
                     )}
                   </TableBody>
                 </Table>
@@ -375,13 +421,15 @@ export default function TeamPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="add-members">
-          <AddMembersSection
-            workspaceId={currentWorkspace.$id}
-            workspaceName={currentWorkspace.name}
-            currentUserId={user!.$id}
-          />
-        </TabsContent>
+        {canInviteMembers && (
+          <TabsContent value="add-members">
+            <AddMembersSection
+              workspaceId={currentWorkspace.$id}
+              workspaceName={currentWorkspace.name}
+              currentUserId={user!.$id}
+            />
+          </TabsContent>
+        )}
       </Tabs>
 
       {/* Edit Member Dialog */}
@@ -471,6 +519,15 @@ export default function TeamPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Delete Member Confirmation Dialog */}
+      <DeleteMemberDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        member={memberToDelete}
+        onConfirm={confirmDeleteMember}
+        isDeleting={deleteMember.isPending}
+      />
     </div>
   );
 }

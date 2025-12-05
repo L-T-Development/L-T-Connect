@@ -13,7 +13,7 @@ export function useNotifications(userId?: string) {
     queryKey: ['notifications', userId],
     queryFn: async () => {
       if (!userId) return [];
-      
+
       const response = await databases.listDocuments(
         DATABASE_ID,
         NOTIFICATIONS_COLLECTION_ID,
@@ -23,7 +23,7 @@ export function useNotifications(userId?: string) {
           Query.limit(50)
         ]
       );
-      
+
       return response.documents as unknown as Notification[];
     },
     enabled: !!userId,
@@ -35,7 +35,7 @@ export function useUnreadNotifications(userId?: string) {
     queryKey: ['notifications', 'unread', userId],
     queryFn: async () => {
       if (!userId) return [];
-      
+
       const response = await databases.listDocuments(
         DATABASE_ID,
         NOTIFICATIONS_COLLECTION_ID,
@@ -45,7 +45,7 @@ export function useUnreadNotifications(userId?: string) {
           Query.orderDesc('$createdAt')
         ]
       );
-      
+
       return response.documents as unknown as Notification[];
     },
     enabled: !!userId,
@@ -82,14 +82,14 @@ export function useCreateNotification() {
           isRead: false,
         }
       );
-      
+
       return response as unknown as Notification;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['notifications', data.userId] });
       queryClient.invalidateQueries({ queryKey: ['notifications', 'unread', data.userId] });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       console.error('Failed to create notification:', error);
     },
   });
@@ -112,17 +112,17 @@ export function useMarkNotificationAsRead() {
         notificationId,
         { isRead: true }
       );
-      
+
       return { notification: response as unknown as Notification, userId };
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['notifications', data.userId] });
       queryClient.invalidateQueries({ queryKey: ['notifications', 'unread', data.userId] });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to mark notification as read',
+        description: (error instanceof Error ? error.message : String(error)) || 'Failed to mark notification as read',
         variant: 'destructive',
       });
     },
@@ -151,7 +151,7 @@ export function useMarkAllNotificationsAsRead() {
           )
         )
       );
-      
+
       return { userId };
     },
     onSuccess: (data) => {
@@ -161,10 +161,10 @@ export function useMarkAllNotificationsAsRead() {
         title: 'All notifications marked as read',
       });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to mark notifications as read',
+        description: (error instanceof Error ? error.message : String(error)) || 'Failed to mark notifications as read',
         variant: 'destructive',
       });
     },
@@ -196,10 +196,10 @@ export function useDeleteNotification() {
         title: 'Notification deleted',
       });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to delete notification',
+        description: (error instanceof Error ? error.message : String(error)) || 'Failed to delete notification',
         variant: 'destructive',
       });
     },
@@ -226,12 +226,12 @@ export async function createNotificationFromTemplate({
   data: any;
 }): Promise<Notification | null> {
   const notifContent = generateNotification(type, data);
-  
+
   if (!notifContent) {
     console.error(`Failed to generate notification for type: ${type}`);
     return null;
   }
-  
+
   try {
     const notification = await databases.createDocument(
       DATABASE_ID,
@@ -249,13 +249,38 @@ export async function createNotificationFromTemplate({
         isRead: false,
       }
     );
-    
-    // TODO: Send email if required (integrate with existing email service)
+
+    // Send email for critical notifications
     if (shouldSendEmail(type)) {
-      console.log(`Email should be sent for notification type: ${type}`);
-      // await sendNotificationEmail({ userId, notification });
+      try {
+        // Get user email from database
+        const USERS_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_USERS_COLLECTION_ID!;
+        const user = await databases.getDocument(
+          process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!,
+          USERS_COLLECTION_ID,
+          userId
+        );
+
+        // Send email notification via API route
+        await fetch('/api/send-notification-email', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            name: (user as any).name || 'User',
+            email: (user as any).email,
+            notificationTitle: notifContent.title,
+            notificationMessage: notifContent.message,
+            actionUrl: notifContent.actionUrl ? `${process.env.NEXT_PUBLIC_APP_URL}${notifContent.actionUrl}` : undefined,
+          }),
+        });
+      } catch (error) {
+        // Don't fail notification creation if email fails
+        console.error('Failed to send notification email:', error);
+      }
     }
-    
+
     return notification as unknown as Notification;
   } catch (error) {
     console.error('Failed to create notification:', error);
@@ -278,18 +303,18 @@ export async function createBulkNotifications({
   data: any;
 }): Promise<Notification[]> {
   // Ensure userIds is always an array
-  const userIdsArray = Array.isArray(userIds) ? userIds : 
-                       typeof userIds === 'string' ? [userIds] :
-                       [];
-  
+  const userIdsArray = Array.isArray(userIds) ? userIds :
+    typeof userIds === 'string' ? [userIds] :
+      [];
+
   // Filter out empty strings and duplicates
   const validUserIds = [...new Set(userIdsArray.filter(id => id && typeof id === 'string' && id.trim() !== ''))];
-  
+
   if (validUserIds.length === 0) {
     console.warn('createBulkNotifications called with no valid user IDs');
     return [];
   }
-  
+
   const notifications = await Promise.all(
     validUserIds.map((userId) =>
       createNotificationFromTemplate({
@@ -300,6 +325,6 @@ export async function createBulkNotifications({
       })
     )
   );
-  
+
   return notifications.filter((n): n is Notification => n !== null);
 }

@@ -42,7 +42,7 @@ export default function ChangePasswordPage() {
 
   const isForced = searchParams.get('forced') === 'true';
 
-  // Redirect if not forced and user doesn't have temp password
+  // Redirect if not forced and user doesn&apos;t have temp password
   React.useEffect(() => {
     if (!isForced && appUser && !appUser.hasTempPassword) {
       router.push('/dashboard');
@@ -147,11 +147,11 @@ export default function ChangePasswordPage() {
     } catch (error: any) {
       console.error('Password change error:', error);
       
-      if (error.message?.includes('Invalid credentials')) {
+      if ((error instanceof Error ? error.message : String(error))?.includes('Invalid credentials')) {
         toast.error('Current password is incorrect');
       } else {
         toast.error('Failed to change password', {
-          description: error.message || 'Please try again',
+          description: (error instanceof Error ? error.message : String(error)) || 'Please try again',
         });
       }
     } finally {

@@ -100,7 +100,7 @@ export function useCreateClientRequirement() {
     onError: (error: Error) => {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to create client requirement',
+        description: (error instanceof Error ? error.message : String(error)) || 'Failed to create client requirement',
         variant: 'destructive',
       });
     },
@@ -144,7 +144,7 @@ export function useUpdateClientRequirement() {
     onError: (error: Error) => {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to update client requirement',
+        description: (error instanceof Error ? error.message : String(error)) || 'Failed to update client requirement',
         variant: 'destructive',
       });
     },
@@ -173,7 +173,7 @@ export function useDeleteClientRequirement() {
     onError: (error: Error) => {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to delete client requirement',
+        description: (error instanceof Error ? error.message : String(error)) || 'Failed to delete client requirement',
         variant: 'destructive',
       });
     },

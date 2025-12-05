@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { useAuth } from '@/components/providers/auth-provider';
-import { useWorkspaces } from '@/hooks/use-workspace';
+import { useCurrentWorkspace } from '@/hooks/use-current-workspace';
 import { useProjects } from '@/hooks/use-project';
 import { useClientRequirements } from '@/hooks/use-client-requirement';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -51,8 +51,7 @@ const priorityConfig: Record<RequirementPriority, { label: string; color: string
 
 export default function RequirementsPage() {
   const { user } = useAuth();
-  const { data: workspaces } = useWorkspaces(user?.$id);
-  const currentWorkspace = workspaces?.[0];
+  const { currentWorkspace } = useCurrentWorkspace();
   const { data: projects = [] } = useProjects(currentWorkspace?.$id);
 
   const [selectedProjectId, setSelectedProjectId] = React.useState<string>('');
@@ -68,7 +67,7 @@ export default function RequirementsPage() {
   React.useEffect(() => {
     const STORAGE_KEY = 'selected-project-id';
     const savedProjectId = localStorage.getItem(STORAGE_KEY);
-    
+
     if (savedProjectId && projects.some(p => p.$id === savedProjectId)) {
       // Restore saved project if it still exists
       setSelectedProjectId(savedProjectId);
@@ -92,11 +91,11 @@ export default function RequirementsPage() {
   const filteredRequirements = React.useMemo(() => {
     return requirements.filter(req => {
       const matchesSearch = req.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                           req.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                           req.clientName.toLowerCase().includes(searchQuery.toLowerCase());
+        req.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        req.clientName.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesStatus = statusFilter === 'ALL' || req.status === statusFilter;
       const matchesPriority = priorityFilter === 'ALL' || req.priority === priorityFilter;
-      
+
       return matchesSearch && matchesStatus && matchesPriority;
     });
   }, [requirements, searchQuery, statusFilter, priorityFilter]);
@@ -150,7 +149,7 @@ export default function RequirementsPage() {
     } catch (error: any) {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to save generated data',
+        description: (error instanceof Error ? error.message : String(error)) || 'Failed to save generated data',
         variant: 'destructive',
       });
     } finally {
@@ -364,7 +363,7 @@ export default function RequirementsPage() {
                         const StatusIcon = status.icon;
 
                         return (
-                          <TableRow 
+                          <TableRow
                             key={requirement.$id}
                             className="cursor-pointer hover:bg-accent"
                             onClick={() => setSelectedRequirement(requirement.$id)}
@@ -389,8 +388,8 @@ export default function RequirementsPage() {
                               {formatDate(requirement.$createdAt)}
                             </TableCell>
                             <TableCell className="text-right">
-                              <Button 
-                                variant="ghost" 
+                              <Button
+                                variant="ghost"
                                 size="sm"
                                 onClick={(e) => {
                                   e.stopPropagation();

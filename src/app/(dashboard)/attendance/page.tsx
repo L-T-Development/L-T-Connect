@@ -5,11 +5,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AttendanceWidget } from '@/components/attendance/attendance-widget';
 import { AttendanceCalendar } from '@/components/attendance/attendance-calendar';
 import { AttendanceStats } from '@/components/attendance/attendance-stats';
-import { Clock, Calendar, BarChart3 } from 'lucide-react';
+import { TeamAttendanceTab } from '@/components/attendance/team-attendance-tab';
+import { useIsManager } from '@/hooks/use-permissions';
+import { Clock, Calendar, BarChart3, Users } from 'lucide-react';
 
 export default function AttendancePage() {
   const [currentMonth] = useState(new Date().getMonth());
   const [currentYear] = useState(new Date().getFullYear());
+  const isManager = useIsManager();
 
   return (
     <div className="flex-1 space-y-6 p-8 pt-6">
@@ -36,6 +39,12 @@ export default function AttendancePage() {
             <BarChart3 className="h-4 w-4" />
             Analytics
           </TabsTrigger>
+          {isManager && (
+            <TabsTrigger value="team" className="gap-2">
+              <Users className="h-4 w-4" />
+              Team
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="today" className="space-y-4">
@@ -54,6 +63,12 @@ export default function AttendancePage() {
         <TabsContent value="analytics" className="space-y-4">
           <AttendanceStats year={currentYear} month={currentMonth} />
         </TabsContent>
+
+        {isManager && (
+          <TabsContent value="team" className="space-y-4">
+            <TeamAttendanceTab />
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );

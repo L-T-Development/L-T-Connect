@@ -39,7 +39,7 @@ function normalizeRole(role: string): TeamMember['role'] {
     'CONTENT_ENGINEER': 'CONTENT_ENGINEER',
     'MEMBER': 'MEMBER',
   };
-  
+
   return roleMap[role] || 'MEMBER';
 }
 
@@ -48,16 +48,16 @@ export function useTeamMembers(workspaceId?: string) {
     queryKey: ['team-members', workspaceId],
     queryFn: async () => {
       if (!workspaceId) return [];
-      
+
       // Query workspace_members collection (new system)
       const WORKSPACE_MEMBERS_COLLECTION = process.env.NEXT_PUBLIC_APPWRITE_COLLECTION_WORKSPACE_MEMBERS_ID || 'workspace_members';
-      
+
       const response = await databases.listDocuments(
         DATABASE_ID,
         WORKSPACE_MEMBERS_COLLECTION,
         [Query.equal('workspaceId', workspaceId), Query.limit(100)]
       );
-      
+
       // Map workspace_members to TeamMember interface
       return response.documents.map((doc: any) => ({
         $id: doc.$id,
@@ -82,13 +82,13 @@ export function useTeamMember(memberId?: string) {
     queryKey: ['team-member', memberId],
     queryFn: async () => {
       if (!memberId) return null;
-      
+
       const response = await databases.getDocument(
         DATABASE_ID,
         COLLECTIONS.USERS,
         memberId
       );
-      
+
       return response as unknown as TeamMember;
     },
     enabled: !!memberId,
@@ -97,7 +97,7 @@ export function useTeamMember(memberId?: string) {
 
 export function useCreateTeamMember() {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: async (data: Omit<TeamMember, '$id' | '$createdAt' | '$updatedAt'>) => {
       const response = await databases.createDocument(
@@ -106,7 +106,7 @@ export function useCreateTeamMember() {
         'unique()',
         data
       );
-      
+
       return response as unknown as TeamMember;
     },
     onSuccess: (_, variables) => {
@@ -117,7 +117,7 @@ export function useCreateTeamMember() {
 
 export function useUpdateTeamMember() {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Partial<TeamMember> }) => {
       const response = await databases.updateDocument(
@@ -126,7 +126,7 @@ export function useUpdateTeamMember() {
         id,
         data
       );
-      
+
       return response as unknown as TeamMember;
     },
     onSuccess: (data) => {
@@ -138,15 +138,18 @@ export function useUpdateTeamMember() {
 
 export function useDeleteTeamMember() {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: async ({ id, workspaceId }: { id: string; workspaceId: string }) => {
+      // ✅ Delete from workspace_members collection (same as where we fetch from)
+      const WORKSPACE_MEMBERS_COLLECTION = process.env.NEXT_PUBLIC_APPWRITE_COLLECTION_WORKSPACE_MEMBERS_ID || 'workspace_members';
+
       await databases.deleteDocument(
         DATABASE_ID,
-        COLLECTIONS.USERS,
+        WORKSPACE_MEMBERS_COLLECTION,
         id
       );
-      
+
       return { id, workspaceId };
     },
     onSuccess: (data) => {

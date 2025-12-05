@@ -2,8 +2,7 @@
 
 import * as React from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useAuth } from '@/components/providers/auth-provider';
-import { useWorkspaces } from '@/hooks/use-workspace';
+import { useCurrentWorkspace } from '@/hooks/use-current-workspace';
 import { useProjects, useUpdateProject, useDeleteProject, useChangeProjectMethodology } from '@/hooks/use-project';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -38,9 +37,7 @@ import type { ProjectStatus, ProjectMethodology } from '@/types';
 export default function ProjectSettingsPage() {
   const params = useParams();
   const router = useRouter();
-  const { user } = useAuth();
-  const { data: workspaces } = useWorkspaces(user?.$id);
-  const currentWorkspace = workspaces?.[0];
+  const { currentWorkspace } = useCurrentWorkspace();
   const { data: projects, isLoading } = useProjects(currentWorkspace?.$id);
   const project = projects?.find(p => p.$id === params.projectId);
   const updateProject = useUpdateProject();
@@ -49,7 +46,7 @@ export default function ProjectSettingsPage() {
 
   const [name, setName] = React.useState('');
   const [description, setDescription] = React.useState('');
-  const [methodology, setMethodology] = React.useState<ProjectMethodology>('KANBAN');
+  const [methodology, setMethodology] = React.useState<ProjectMethodology>('SCRUM');
   const [status, setStatus] = React.useState<ProjectStatus>('PLANNING');
   const [startDate, setStartDate] = React.useState<Date | undefined>(undefined);
   const [endDate, setEndDate] = React.useState<Date | undefined>(undefined);
@@ -90,7 +87,7 @@ export default function ProjectSettingsPage() {
       workspaceId: currentWorkspace.$id,
       methodology: newMethodology,
     });
-    
+
     setMethodology(newMethodology);
   };
 
@@ -189,7 +186,6 @@ export default function ProjectSettingsPage() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="SCRUM">Scrum</SelectItem>
-                      <SelectItem value="KANBAN">Kanban</SelectItem>
                     </SelectContent>
                   </Select>
                   <Button
@@ -339,7 +335,7 @@ export default function ProjectSettingsPage() {
       <MethodologySelector
         open={showMethodologyDialog}
         onOpenChange={setShowMethodologyDialog}
-        currentMethodology={methodology as 'SCRUM' | 'KANBAN'}
+        currentMethodology={methodology}
         onSelect={handleMethodologyChange}
         isChanging={changeMethodology.isPending}
       />

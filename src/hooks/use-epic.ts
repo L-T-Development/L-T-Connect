@@ -12,13 +12,13 @@ export function useEpics(projectId?: string) {
     queryKey: ['epics', projectId],
     queryFn: async () => {
       if (!projectId) return [];
-      
+
       const response = await databases.listDocuments(
         DATABASE_ID,
         EPICS_COLLECTION_ID,
         [Query.equal('projectId', projectId), Query.orderDesc('$createdAt')]
       );
-      
+
       return response.documents as unknown as Epic[];
     },
     enabled: !!projectId,
@@ -30,13 +30,13 @@ export function useEpic(epicId?: string) {
     queryKey: ['epic', epicId],
     queryFn: async () => {
       if (!epicId) return null;
-      
+
       const response = await databases.getDocument(
         DATABASE_ID,
         EPICS_COLLECTION_ID,
         epicId
       );
-      
+
       return response as unknown as Epic;
     },
     enabled: !!epicId,
@@ -49,13 +49,13 @@ export function useEpicsByRequirement(requirementId?: string) {
     queryKey: ['epics', 'requirement', requirementId],
     queryFn: async () => {
       if (!requirementId) return [];
-      
+
       const response = await databases.listDocuments(
         DATABASE_ID,
         EPICS_COLLECTION_ID,
         [Query.equal('requirementId', requirementId), Query.orderDesc('$createdAt')]
       );
-      
+
       return response.documents as unknown as Epic[];
     },
     enabled: !!requirementId,
@@ -80,6 +80,11 @@ export function useCreateEpic() {
       createdBy: string;
       createdByName?: string;
     }) => {
+      // DEFENSIVE: Validate workspaceId is provided
+      if (!data.workspaceId) {
+        throw new Error('Workspace ID is required. Please select a workspace first.');
+      }
+
       // Get existing epics to generate hierarchyId
       const existingEpics = await databases.listDocuments(
         DATABASE_ID,
@@ -130,7 +135,7 @@ export function useCreateEpic() {
     onError: (error: Error) => {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to create epic',
+        description: (error instanceof Error ? error.message : String(error)) || 'Failed to create epic',
         variant: 'destructive',
       });
     },
@@ -157,7 +162,7 @@ export function useUpdateEpic() {
       };
     }) => {
       const { epicId, ...updates } = data;
-      
+
       const response = await databases.updateDocument(
         DATABASE_ID,
         EPICS_COLLECTION_ID,
@@ -181,7 +186,7 @@ export function useUpdateEpic() {
     onError: (error: Error) => {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to update epic',
+        description: (error instanceof Error ? error.message : String(error)) || 'Failed to update epic',
         variant: 'destructive',
       });
     },
@@ -210,7 +215,7 @@ export function useDeleteEpic() {
     onError: (error: Error) => {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to delete epic',
+        description: (error instanceof Error ? error.message : String(error)) || 'Failed to delete epic',
         variant: 'destructive',
       });
     },

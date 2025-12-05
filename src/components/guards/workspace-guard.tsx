@@ -32,7 +32,7 @@ export function WorkspaceGuard({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // If no workspaces, don't render children (redirect will happen)
+  // If no workspaces, don&apos;t render children (redirect will happen)
   if (!workspaces || workspaces.length === 0) {
     return null;
   }

@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Client, Databases, ID, Users, Permission, Role } from 'node-appwrite';
 import { sendWelcomeEmail, sendWorkspaceInvitation, generateTempPassword } from '@/lib/email';
+import { logger } from '@/lib/logger';
 
 // Initialize Appwrite server client
 const client = new Client()
@@ -39,8 +40,8 @@ export async function POST(request: NextRequest) {
     const body: CreateUserRequest = await request.json();
     const { name, email, roleId, roleName, workspaceId, workspaceName, createdBy, createdByName } = body;
 
-    console.log('🔧 Using DATABASE_ID:', DATABASE_ID);
-    console.log('🔧 Using APP_USERS_COLLECTION_ID:', APP_USERS_COLLECTION_ID);
+    logger.debug('Using DATABASE_ID', { DATABASE_ID });
+    logger.debug('Using APP_USERS_COLLECTION_ID', { APP_USERS_COLLECTION_ID });
 
     // Validate required fields
     if (!name || !email || !roleId || !roleName || !workspaceId || !workspaceName || !createdBy || !createdByName) {
@@ -56,11 +57,11 @@ export async function POST(request: NextRequest) {
       DATABASE_ID,
       WORKSPACE_MEMBERS_COLLECTION_ID
     );
-    
+
     const existingInWorkspace = workspaceMembersResponse.documents.find(
-      (doc: any) => doc.email === email && doc.workspaceId === workspaceId
+      (doc) => doc.email === email && doc.workspaceId === workspaceId
     );
-    
+
     if (existingInWorkspace) {
       return NextResponse.json(
         { error: 'A user with this email already exists in this workspace' },
@@ -76,7 +77,7 @@ export async function POST(request: NextRequest) {
     );
 
     const existingUsers = {
-      documents: allUsers.documents.filter((doc: any) => doc.userEmail === email)
+      documents: allUsers.documents.filter((doc) => doc.userEmail === email)
     };
 
     const userExists = existingUsers.documents.length > 0;
@@ -84,7 +85,7 @@ export async function POST(request: NextRequest) {
     if (userExists) {
       // User exists - send workspace invitation
       const existingUser = existingUsers.documents[0];
-      
+
       // Check if already in this workspace
       const workspaceIds = (existingUser.workspaceIds as string[]) || [];
       if (workspaceIds.includes(workspaceId)) {
@@ -96,7 +97,7 @@ export async function POST(request: NextRequest) {
 
       // Create pending workspace access request
       const invitationToken = ID.unique();
-      
+
       await databases.createDocument(
         DATABASE_ID,
         PENDING_ACCESS_COLLECTION_ID,
@@ -147,11 +148,12 @@ export async function POST(request: NextRequest) {
         tempPassword,
         name
       );
-      console.log('✅ Appwrite auth account created:', newUserId);
-    } catch (authError: any) {
-      console.error('Error creating Appwrite auth account:', authError);
+      logger.info('Appwrite auth account created', { userId: newUserId });
+    } catch (authError: unknown) {
+      const errorMessage = authError instanceof Error ? authError.message : 'Unknown error';
+      logger.error('Error creating Appwrite auth account', { error: errorMessage });
       return NextResponse.json(
-        { error: `Failed to create auth account: ${authError.message}` },
+        { error: `Failed to create auth account: ${errorMessage}` },
         { status: 500 }
       );
     }
@@ -159,7 +161,7 @@ export async function POST(request: NextRequest) {
     // Step 3: Create app_users record
     try {
       // Create with all fields at once (no update needed)
-      const documentData: any = {
+      const documentData = {
         userId: newUserId,
         userEmail: email,
         name: name,
@@ -173,7 +175,7 @@ export async function POST(request: NextRequest) {
         createdBy: createdBy,
       };
 
-      console.log('📝 Creating app_users document...');
+      logger.debug('Creating app_users document');
 
       await databases.createDocument(
         DATABASE_ID,
@@ -186,19 +188,20 @@ export async function POST(request: NextRequest) {
           Permission.delete(Role.user(newUserId)),
         ]
       );
-      
-      console.log('✅ app_users record created successfully');
-    } catch (dbError: any) {
+
+      logger.info('app_users record created successfully');
+    } catch (dbError: unknown) {
+      const errorMessage = dbError instanceof Error ? dbError.message : 'Unknown error';
       // If app_users creation fails, try to delete the auth account
       try {
         await users.delete(newUserId);
       } catch (deleteError) {
-        console.error('Failed to cleanup auth account:', deleteError);
+        logger.error('Failed to cleanup auth account', { error: deleteError });
       }
-      
-      console.error('Error creating app_users record:', dbError);
+
+      logger.error('Error creating app_users record', { error: errorMessage });
       return NextResponse.json(
-        { error: `Failed to create user record: ${dbError.message}` },
+        { error: `Failed to create user record: ${errorMessage}` },
         { status: 500 }
       );
     }
@@ -224,9 +227,9 @@ export async function POST(request: NextRequest) {
           Permission.update(Role.user(newUserId)),
         ]
       );
-      console.log('✅ workspace_members record created');
-    } catch (memberError: any) {
-      console.error('Error adding to workspace_members:', memberError);
+      logger.info('workspace_members record created');
+    } catch (memberError: unknown) {
+      logger.error('Error adding to workspace_members', { error: memberError });
       // Don't fail the entire operation, just log the error
     }
 
@@ -250,10 +253,10 @@ export async function POST(request: NextRequest) {
             memberIds: [...currentMemberIds, newUserId],
           }
         );
-        console.log('✅ User added to workspace memberIds');
+        logger.info('User added to workspace memberIds');
       }
-    } catch (workspaceError: any) {
-      console.error('Error updating workspace memberIds:', workspaceError);
+    } catch (workspaceError: unknown) {
+      logger.error('Error updating workspace memberIds', { error: workspaceError });
       // Don't fail the entire operation, just log the error
     }
 
@@ -265,9 +268,9 @@ export async function POST(request: NextRequest) {
         tempPassword,
         workspaceName,
       });
-      console.log('✅ Welcome email sent');
-    } catch (emailError: any) {
-      console.error('Error sending welcome email:', emailError);
+      logger.info('Welcome email sent');
+    } catch (emailError: unknown) {
+      logger.error('Error sending welcome email', { error: emailError });
       // Don't fail the operation if email fails, user is still created
     }
 
@@ -278,10 +281,11 @@ export async function POST(request: NextRequest) {
       userId: newUserId,
     });
 
-  } catch (error: any) {
-    console.error('Error in create user API:', error);
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? (error instanceof Error ? error.message : String(error)) : 'Internal server error';
+    logger.error('Error in create user API', { error: errorMessage });
     return NextResponse.json(
-      { error: error.message || 'Internal server error' },
+      { error: errorMessage },
       { status: 500 }
     );
   }

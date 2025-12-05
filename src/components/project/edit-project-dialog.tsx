@@ -30,17 +30,13 @@ import {
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
-import { Calendar } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
-import { CalendarIcon } from 'lucide-react';
+import { DatePicker } from '@/components/ui/date-picker';
 import type { Project } from '@/types';
 
 const projectSchema = z.object({
   name: z.string().min(3, 'Name must be at least 3 characters'),
   description: z.string().optional(),
-  methodology: z.enum(['SCRUM', 'KANBAN']),
+  methodology: z.enum(['SCRUM']),
   status: z.enum(['PLANNING', 'ACTIVE', 'ON_HOLD', 'COMPLETED', 'ARCHIVED']),
   startDate: z.date().optional(),
   endDate: z.date().optional(),
@@ -68,7 +64,7 @@ export function EditProjectDialog({
     defaultValues: {
       name: '',
       description: '',
-      methodology: 'KANBAN',
+      methodology: 'SCRUM',
       status: 'PLANNING',
     },
   });
@@ -110,7 +106,7 @@ export function EditProjectDialog({
             <FormField
               control={form.control}
               name="name"
-              render={({ field }: any) => (
+              render={({ field }) => (
                 <FormItem>
                   <FormLabel>Project Name *</FormLabel>
                   <FormControl>
@@ -125,7 +121,7 @@ export function EditProjectDialog({
             <FormField
               control={form.control}
               name="description"
-              render={({ field }: any) => (
+              render={({ field }) => (
                 <FormItem>
                   <FormLabel>Description</FormLabel>
                   <FormControl>
@@ -145,7 +141,7 @@ export function EditProjectDialog({
               <FormField
                 control={form.control}
                 name="methodology"
-                render={({ field }: any) => (
+                render={({ field }) => (
                   <FormItem>
                     <FormLabel>Methodology *</FormLabel>
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
@@ -156,7 +152,6 @@ export function EditProjectDialog({
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="SCRUM">Scrum</SelectItem>
-                        <SelectItem value="KANBAN">Kanban</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -168,7 +163,7 @@ export function EditProjectDialog({
               <FormField
                 control={form.control}
                 name="status"
-                render={({ field }: any) => (
+                render={({ field }) => (
                   <FormItem>
                     <FormLabel>Status *</FormLabel>
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
@@ -196,37 +191,15 @@ export function EditProjectDialog({
               <FormField
                 control={form.control}
                 name="startDate"
-                render={({ field }: any) => (
+                render={({ field }) => (
                   <FormItem className="flex flex-col">
                     <FormLabel>Start Date</FormLabel>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant="outline"
-                            className={cn(
-                              'w-full pl-3 text-left font-normal',
-                              !field.value && 'text-muted-foreground'
-                            )}
-                          >
-                            {field.value ? (
-                              format(field.value, 'PPP')
-                            ) : (
-                              <span>Pick a date</span>
-                            )}
-                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={field.value}
-                          onSelect={field.onChange}
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
+                    <DatePicker
+                      date={field.value ? new Date(field.value) : undefined}
+                      onSelect={field.onChange}
+                      placeholder="Pick a date"
+                      buttonClassName="w-full"
+                    />
                     <FormMessage />
                   </FormItem>
                 )}
@@ -236,37 +209,15 @@ export function EditProjectDialog({
               <FormField
                 control={form.control}
                 name="endDate"
-                render={({ field }: any) => (
+                render={({ field }) => (
                   <FormItem className="flex flex-col">
-                    <FormLabel>End Date</FormLabel>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant="outline"
-                            className={cn(
-                              'w-full pl-3 text-left font-normal',
-                              !field.value && 'text-muted-foreground'
-                            )}
-                          >
-                            {field.value ? (
-                              format(field.value, 'PPP')
-                            ) : (
-                              <span>Pick a date</span>
-                            )}
-                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={field.value}
-                          onSelect={field.onChange}
-                          initialFocus
-                        />
-                      </PopoverContent>
-                    </Popover>
+                    <FormLabel>End Date (Optional)</FormLabel>
+                    <DatePicker
+                      date={field.value ? new Date(field.value) : undefined}
+                      onSelect={field.onChange}
+                      placeholder="Pick a date"
+                      buttonClassName="w-full"
+                    />
                     <FormMessage />
                   </FormItem>
                 )}

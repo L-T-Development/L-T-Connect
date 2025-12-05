@@ -135,10 +135,10 @@ export function useCreateSprint() {
         description: 'The sprint has been created successfully.',
       });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to create sprint',
+        description: (error instanceof Error ? error.message : String(error)) || 'Failed to create sprint',
         variant: 'destructive',
       });
     },
@@ -173,10 +173,10 @@ export function useUpdateSprint() {
         description: 'The sprint has been updated successfully.',
       });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to update sprint',
+        description: (error instanceof Error ? error.message : String(error)) || 'Failed to update sprint',
         variant: 'destructive',
       });
     },
@@ -208,10 +208,10 @@ export function useDeleteSprint() {
         description: 'The sprint has been deleted successfully.',
       });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to delete sprint',
+        description: (error instanceof Error ? error.message : String(error)) || 'Failed to delete sprint',
         variant: 'destructive',
       });
     },
@@ -270,10 +270,10 @@ export function useStartSprint() {
         description: 'The sprint is now active.',
       });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to start sprint',
+        description: (error instanceof Error ? error.message : String(error)) || 'Failed to start sprint',
         variant: 'destructive',
       });
     },
@@ -341,10 +341,10 @@ export function useCompleteSprint() {
         description: 'The sprint has been marked as completed.',
       });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to complete sprint',
+        description: (error instanceof Error ? error.message : String(error)) || 'Failed to complete sprint',
         variant: 'destructive',
       });
     },

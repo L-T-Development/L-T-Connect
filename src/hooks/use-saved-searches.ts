@@ -90,7 +90,7 @@ export function useCreateSavedSearch() {
     },
     onError: (error: Error) => {
       // Check if collection doesn't exist
-      if (error.message?.includes('Collection with the requested ID could not be found')) {
+      if ((error instanceof Error ? error.message : String(error))?.includes('Collection with the requested ID could not be found')) {
         toast({
           title: 'Collection Not Found',
           description: 'Please create the "saved_searches" collection in Appwrite. See documentation for schema.',
@@ -99,7 +99,7 @@ export function useCreateSavedSearch() {
       } else {
         toast({
           title: 'Error',
-          description: error.message || 'Failed to save search',
+          description: (error instanceof Error ? error.message : String(error)) || 'Failed to save search',
           variant: 'destructive',
         });
       }
@@ -145,7 +145,7 @@ export function useUpdateSavedSearch() {
     onError: (error: Error) => {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to update search',
+        description: (error instanceof Error ? error.message : String(error)) || 'Failed to update search',
         variant: 'destructive',
       });
     },
@@ -180,7 +180,7 @@ export function useDeleteSavedSearch() {
     onError: (error: Error) => {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to delete search',
+        description: (error instanceof Error ? error.message : String(error)) || 'Failed to delete search',
         variant: 'destructive',
       });
     },

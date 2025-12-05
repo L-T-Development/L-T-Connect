@@ -37,6 +37,7 @@ import { format } from 'date-fns';
 import { CalendarIcon, Loader2, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import type { TaskStatus } from '@/types';
+import { TeamMemberSelector } from '@/components/tasks/team-member-selector';
 
 const LABEL_COLORS = [
   { name: 'Red', value: 'red', class: 'bg-red-500' },
@@ -58,6 +59,7 @@ const taskSchema = z.object({
   epicId: z.string().optional(),
   functionalRequirementId: z.string().optional(), // NEW: Link to FR
   labels: z.array(z.string()).optional(),
+  assignedTo: z.array(z.string()).optional(), // NEW: Array of user IDs
 });
 
 type TaskFormValues = z.infer<typeof taskSchema>;
@@ -70,6 +72,7 @@ interface CreateTaskDialogProps {
   isLoading?: boolean;
   existingLabels?: string[]; // Labels from other tasks in the project
   projectId?: string; // For fetching epics and FRs
+  workspaceId?: string; // For team member selector
   epics?: Array<{ $id: string; hierarchyId: string; name: string }>; // Available epics
   functionalRequirements?: Array<{ $id: string; hierarchyId: string; title: string }>; // Available FRs
 }
@@ -83,6 +86,7 @@ export function CreateTaskDialog({
   existingLabels = [],
   epics = [],
   functionalRequirements = [],
+  workspaceId,
 }: CreateTaskDialogProps) {
   const [newLabel, setNewLabel] = React.useState('');
   const [selectedColor, setSelectedColor] = React.useState('blue');
@@ -96,6 +100,7 @@ export function CreateTaskDialog({
       status: defaultStatus,
       priority: 'MEDIUM',
       labels: [],
+      assignedTo: [],
     },
   });
 
@@ -135,7 +140,7 @@ export function CreateTaskDialog({
             <FormField
               control={form.control}
               name="title"
-              render={({ field }: any) => (
+              render={({ field }) => (
                 <FormItem>
                   <FormLabel>Title *</FormLabel>
                   <FormControl>
@@ -150,7 +155,7 @@ export function CreateTaskDialog({
             <FormField
               control={form.control}
               name="description"
-              render={({ field }: any) => (
+              render={({ field }) => (
                 <FormItem>
                   <FormLabel>Description</FormLabel>
                   <FormControl>
@@ -170,7 +175,7 @@ export function CreateTaskDialog({
               <FormField
                 control={form.control}
                 name="status"
-                render={({ field }: any) => (
+                render={({ field }) => (
                   <FormItem>
                     <FormLabel>Status *</FormLabel>
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
@@ -196,7 +201,7 @@ export function CreateTaskDialog({
               <FormField
                 control={form.control}
                 name="priority"
-                render={({ field }: any) => (
+                render={({ field }) => (
                   <FormItem>
                     <FormLabel>Priority *</FormLabel>
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
@@ -238,7 +243,7 @@ export function CreateTaskDialog({
             <FormField
               control={form.control}
               name="dueDate"
-              render={({ field }: any) => (
+              render={({ field }) => (
                 <FormItem className="flex flex-col">
                   <FormLabel>Due Date</FormLabel>
                   <Popover>
@@ -341,6 +346,29 @@ export function CreateTaskDialog({
               />
             )}
 
+            {/* Assignee */}
+            {workspaceId && (
+              <FormField
+                control={form.control}
+                name="assignedTo"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Assign To</FormLabel>
+                    <FormControl>
+                      <TeamMemberSelector
+                        workspaceId={workspaceId}
+                        value={field.value || []}
+                        onChange={field.onChange}
+                        placeholder="Select team members to assign..."
+                        multiSelect={true}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+
             {/* Labels */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
@@ -354,7 +382,7 @@ export function CreateTaskDialog({
                   {showLabelInput ? 'Select Existing' : '+ Create New'}
                 </Button>
               </div>
-              
+
               {!showLabelInput && existingLabels.length > 0 && (
                 <div className="flex flex-wrap gap-2">
                   {existingLabels.filter(label => !labels.includes(label)).map((label, index) => {

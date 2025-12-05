@@ -2,8 +2,9 @@
 
 import * as React from "react";
 import { useAuth } from "@/components/providers/auth-provider";
-import { useWorkspaces } from "@/hooks/use-workspace";
+import { useCurrentWorkspace } from "@/hooks/use-current-workspace";
 import { useTheme } from "next-themes";
+import { DeleteWorkspaceDialog } from "@/components/workspace/delete-workspace-dialog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,36 +16,39 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { 
-  Settings as SettingsIcon, 
+import {
+  Settings as SettingsIcon,
   Globe,
   Trash2
 } from "lucide-react";
 import { toast } from "sonner";
 import NotificationPreferences from "@/components/settings/notification-preferences";
+import { useIsManager } from '@/hooks/use-permissions';
+import { Shield } from 'lucide-react';
 
 export default function SettingsPage() {
   const { user } = useAuth();
-  const { data: workspaces, isLoading: workspacesLoading } = useWorkspaces(user?.$id);
-  const currentWorkspace = workspaces?.[0];
+  const { currentWorkspace, isLoading: workspacesLoading } = useCurrentWorkspace();
   const { theme, setTheme, systemTheme } = useTheme();
-  
+
   const [mounted, setMounted] = React.useState(false);
   const [isUpdating, setIsUpdating] = React.useState(false);
   const [compactMode, setCompactMode] = React.useState(false);
   const [showAnimations, setShowAnimations] = React.useState(true);
+  const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
+  const isManager = useIsManager(); // RBAC check
 
   // Avoid hydration mismatch
   React.useEffect(() => {
     setMounted(true);
-    
+
     // Load display preferences from localStorage
     const compactModeStored = localStorage.getItem('compact-mode') === 'true';
     const noAnimations = localStorage.getItem('no-animations') === 'true';
-    
+
     setCompactMode(compactModeStored);
     setShowAnimations(!noAnimations);
-    
+
     // Apply stored preferences
     if (compactModeStored) {
       document.documentElement.classList.add('compact-mode');
@@ -60,10 +64,10 @@ export default function SettingsPage() {
   const handleProfileUpdate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsUpdating(true);
-    
+
     // Simulate update
     await new Promise(resolve => setTimeout(resolve, 1000));
-    
+
     toast.success('Profile updated successfully');
     setIsUpdating(false);
   };
@@ -71,10 +75,10 @@ export default function SettingsPage() {
   const handleWorkspaceUpdate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsUpdating(true);
-    
+
     // Simulate update
     await new Promise(resolve => setTimeout(resolve, 1000));
-    
+
     toast.success('Workspace settings updated successfully');
     setIsUpdating(false);
   };
@@ -157,7 +161,7 @@ export default function SettingsPage() {
                     <Label htmlFor="name">Full Name</Label>
                     <Input id="name" defaultValue={user?.name} />
                   </div>
-                  
+
                   <div className="grid gap-2">
                     <Label htmlFor="email">Email</Label>
                     <Input id="email" type="email" defaultValue={user?.email} />
@@ -170,8 +174,8 @@ export default function SettingsPage() {
 
                   <div className="grid gap-2">
                     <Label htmlFor="bio">Bio</Label>
-                    <Textarea 
-                      id="bio" 
+                    <Textarea
+                      id="bio"
                       placeholder="Tell us about yourself..."
                       rows={4}
                     />
@@ -188,113 +192,141 @@ export default function SettingsPage() {
           </Card>
         </TabsContent>
 
-        {/* Workspace Tab */}
+        {/* Workspace Tab - Manager Only */}
         <TabsContent value="workspace" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Workspace Settings</CardTitle>
-              <CardDescription>Manage workspace details and configuration</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleWorkspaceUpdate} className="space-y-6">
-                <div className="grid gap-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="workspace-name">Workspace Name</Label>
-                    <Input id="workspace-name" defaultValue={currentWorkspace.name} />
-                  </div>
+          {!isManager ? (
+            <Card className="border-destructive/50">
+              <CardHeader>
+                <div className="flex items-center gap-2 text-destructive">
+                  <Shield className="h-6 w-6" />
+                  <CardTitle>Access Denied</CardTitle>
+                </div>
+                <CardDescription>
+                  You don&apos;t have permission to access workspace settings.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Only workspace managers and administrators can manage workspace settings,
+                  including renaming and deleting the workspace.
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Please contact your workspace administrator if you need to make changes.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Workspace Settings</CardTitle>
+                  <CardDescription>Manage workspace details and configuration</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={handleWorkspaceUpdate} className="space-y-6">
+                    <div className="grid gap-4">
+                      <div className="grid gap-2">
+                        <Label htmlFor="workspace-name">Workspace Name</Label>
+                        <Input id="workspace-name" defaultValue={currentWorkspace.name} />
+                      </div>
 
-                  <div className="grid gap-2">
-                    <Label htmlFor="workspace-desc">Description</Label>
-                    <Textarea 
-                      id="workspace-desc" 
-                      defaultValue={currentWorkspace.description}
-                      rows={3}
-                    />
-                  </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="workspace-desc">Description</Label>
+                        <Textarea
+                          id="workspace-desc"
+                          defaultValue={currentWorkspace.description}
+                          rows={3}
+                        />
+                      </div>
 
-                  <div className="grid gap-2">
-                    <Label htmlFor="invite-code">Invite Code</Label>
-                    <div className="flex gap-2">
-                      <Input 
-                        id="invite-code" 
-                        defaultValue={currentWorkspace.inviteCode} 
-                        readOnly
-                      />
-                      <Button type="button" variant="outline">
-                        Regenerate
+                      <div className="grid gap-2">
+                        <Label htmlFor="invite-code">Invite Code</Label>
+                        <div className="flex gap-2">
+                          <Input
+                            id="invite-code"
+                            defaultValue={currentWorkspace.inviteCode}
+                            readOnly
+                          />
+                          <Button type="button" variant="outline">
+                            Regenerate
+                          </Button>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Share this code to invite team members
+                        </p>
+                      </div>
+                    </div>
+
+                    <Separator />
+
+                    <div className="space-y-4">
+                      <h3 className="text-lg font-medium">Workspace Preferences</h3>
+
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <Label>Allow member invites</Label>
+                          <p className="text-sm text-muted-foreground">
+                            Let team members invite others
+                          </p>
+                        </div>
+                        <Switch defaultChecked />
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <Label>Public workspace</Label>
+                          <p className="text-sm text-muted-foreground">
+                            Make workspace visible to public
+                          </p>
+                        </div>
+                        <Switch />
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <Label>Require approval for tasks</Label>
+                          <p className="text-sm text-muted-foreground">
+                            Tasks need approval before completion
+                          </p>
+                        </div>
+                        <Switch />
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end">
+                      <Button type="submit" disabled={isUpdating}>
+                        {isUpdating ? 'Saving...' : 'Save Changes'}
                       </Button>
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      Share this code to invite team members
-                    </p>
-                  </div>
-                </div>
+                  </form>
+                </CardContent>
+              </Card>
 
-                <Separator />
-
-                <div className="space-y-4">
-                  <h3 className="text-lg font-medium">Workspace Preferences</h3>
-                  
+              <Card className="border-red-200 dark:border-red-900">
+                <CardHeader>
+                  <CardTitle className="text-red-600 dark:text-red-400">Danger Zone</CardTitle>
+                  <CardDescription>Irreversible actions for this workspace</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label>Allow member invites</Label>
+                    <div>
+                      <p className="font-medium">Delete Workspace</p>
                       <p className="text-sm text-muted-foreground">
-                        Let team members invite others
+                        Permanently delete this workspace and all its data
                       </p>
                     </div>
-                    <Switch defaultChecked />
+                    <Button
+                      variant="destructive"
+                      onClick={() => setDeleteDialogOpen(true)}
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete
+                    </Button>
                   </div>
-
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label>Public workspace</Label>
-                      <p className="text-sm text-muted-foreground">
-                        Make workspace visible to public
-                      </p>
-                    </div>
-                    <Switch />
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label>Require approval for tasks</Label>
-                      <p className="text-sm text-muted-foreground">
-                        Tasks need approval before completion
-                      </p>
-                    </div>
-                    <Switch />
-                  </div>
-                </div>
-
-                <div className="flex justify-end">
-                  <Button type="submit" disabled={isUpdating}>
-                    {isUpdating ? 'Saving...' : 'Save Changes'}
-                  </Button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
-
-          <Card className="border-red-200 dark:border-red-900">
-            <CardHeader>
-              <CardTitle className="text-red-600 dark:text-red-400">Danger Zone</CardTitle>
-              <CardDescription>Irreversible actions for this workspace</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium">Delete Workspace</p>
-                  <p className="text-sm text-muted-foreground">
-                    Permanently delete this workspace and all its data
-                  </p>
-                </div>
-                <Button variant="destructive">
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Delete
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+                </CardContent>
+              </Card>
+            </>
+          )}
         </TabsContent>
 
         {/* Notifications Tab */}
@@ -312,7 +344,7 @@ export default function SettingsPage() {
             <CardContent className="space-y-6">
               <div className="space-y-4">
                 <h3 className="text-lg font-medium">Password</h3>
-                
+
                 <div className="grid gap-4">
                   <div className="grid gap-2">
                     <Label htmlFor="current-password">Current Password</Label>
@@ -337,7 +369,7 @@ export default function SettingsPage() {
 
               <div className="space-y-4">
                 <h3 className="text-lg font-medium">Two-Factor Authentication</h3>
-                
+
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
                     <Label>Enable 2FA</Label>
@@ -356,7 +388,7 @@ export default function SettingsPage() {
                 <p className="text-sm text-muted-foreground">
                   Manage your active sessions across devices
                 </p>
-                
+
                 <div className="space-y-2">
                   <div className="flex items-center justify-between p-4 rounded-lg border">
                     <div className="flex items-center gap-3">
@@ -392,14 +424,14 @@ export default function SettingsPage() {
                   Select the theme for the application
                   {mounted && theme === 'system' && ` (currently using ${currentTheme} mode)`}
                 </p>
-                
+
                 {mounted ? (
                   <RadioGroup value={theme} onValueChange={(value) => setTheme(value)} className="grid gap-4">
                     <div className={`flex items-center justify-between p-4 rounded-lg border ${theme === 'light' ? 'border-primary bg-primary/5' : ''}`}>
                       <div className="flex items-center gap-3">
                         <RadioGroupItem value="light" id="light" />
                         <Label htmlFor="light" className="cursor-pointer flex items-center gap-3">
-                          <div className="h-10 w-10 rounded bg-white border-2 shadow-sm" />
+                          <div className="h-10 w-10 rounded bg-white dark:bg-gray-800 border-2 shadow-sm" />
                           <div>
                             <p className="font-medium">Light</p>
                             <p className="text-sm text-muted-foreground">Light color scheme</p>
@@ -443,7 +475,7 @@ export default function SettingsPage() {
 
               <div className="space-y-4">
                 <h3 className="text-lg font-medium">Display</h3>
-                
+
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
                     <Label>Compact mode</Label>
@@ -451,7 +483,7 @@ export default function SettingsPage() {
                       Use smaller spacing between elements
                     </p>
                   </div>
-                  <Switch 
+                  <Switch
                     checked={compactMode}
                     onCheckedChange={(checked) => {
                       setCompactMode(checked);
@@ -475,7 +507,7 @@ export default function SettingsPage() {
                       Enable interface animations
                     </p>
                   </div>
-                  <Switch 
+                  <Switch
                     checked={showAnimations}
                     onCheckedChange={(checked) => {
                       setShowAnimations(checked);
@@ -496,6 +528,12 @@ export default function SettingsPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Delete Workspace Dialog */}
+      <DeleteWorkspaceDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+      />
     </div>
   );
 }

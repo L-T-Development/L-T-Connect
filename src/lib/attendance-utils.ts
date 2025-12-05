@@ -1,4 +1,9 @@
 import { z } from 'zod';
+import { databases } from '@/lib/appwrite-client';
+import { Query } from 'appwrite';
+
+const DATABASE_ID = process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!;
+const LEAVE_REQUESTS_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_LEAVE_REQUESTS_COLLECTION_ID!;
 
 /**
  * Attendance Management Utilities
@@ -92,7 +97,7 @@ export function getWeekOfMonth(date: string): number {
   const firstDay = new Date(d.getFullYear(), d.getMonth(), 1);
   const dayOfMonth = d.getDate();
   const firstDayOfWeek = firstDay.getDay();
-  
+
   // Calculate which week of the month this date falls in
   return Math.ceil((dayOfMonth + firstDayOfWeek) / 7);
 }
@@ -111,15 +116,15 @@ export function isSaturdayWorking(date: string): boolean {
  */
 export function isWeekend(date: string): boolean {
   const day = new Date(date).getDay();
-  
+
   // Sunday is always a weekend
   if (day === 0) return true;
-  
+
   // Saturday depends on week of month
   if (day === 6) {
     return !isSaturdayWorking(date);
   }
-  
+
   return false;
 }
 
@@ -129,15 +134,15 @@ export function isWeekend(date: string): boolean {
  */
 export function isWorkingDay(date: string): boolean {
   const day = new Date(date).getDay();
-  
+
   // Sunday is never a working day
   if (day === 0) return false;
-  
+
   // Saturday is working only on weeks 1 and 3
   if (day === 6) {
     return isSaturdayWorking(date);
   }
-  
+
   // Monday to Friday are always working days
   return WORK_SCHEDULE.WORKING_DAYS.includes(day);
 }
@@ -172,7 +177,7 @@ export function calculateTimeDifference(startTime: string, endTime: string): num
 export function formatDuration(minutes: number): string {
   const hours = Math.floor(minutes / 60);
   const mins = minutes % 60;
-  
+
   if (hours === 0) {
     return `${mins}m`;
   }
@@ -204,10 +209,10 @@ export function isLateCheckIn(checkInTime: string): boolean {
   const hours = checkIn.getHours();
   const minutes = checkIn.getMinutes();
   const checkInMinutes = hours * 60 + minutes;
-  
+
   const startMinutes = timeToMinutes(WORK_SCHEDULE.START_TIME);
   const graceMinutes = startMinutes + WORK_SCHEDULE.GRACE_PERIOD_MINUTES;
-  
+
   return checkInMinutes > graceMinutes;
 }
 
@@ -219,13 +224,13 @@ export function calculateLateMinutes(checkInTime: string): number {
   const hours = checkIn.getHours();
   const minutes = checkIn.getMinutes();
   const checkInMinutes = hours * 60 + minutes;
-  
+
   const startMinutes = timeToMinutes(WORK_SCHEDULE.START_TIME);
-  
+
   if (checkInMinutes <= startMinutes) {
     return 0;
   }
-  
+
   return checkInMinutes - startMinutes;
 }
 
@@ -240,25 +245,25 @@ export function determineAttendanceStatus(
   if (!checkInTime) {
     return 'ABSENT';
   }
-  
+
   if (isLateCheckIn(checkInTime)) {
     if (!checkOutTime || !workHours) {
       return 'LATE';
     }
-    
+
     if (workHours < WORK_SCHEDULE.HALF_DAY_HOURS) {
       return 'HALF_DAY';
     }
-    
+
     return 'LATE';
   }
-  
+
   if (checkOutTime && workHours) {
     if (workHours < WORK_SCHEDULE.HALF_DAY_HOURS) {
       return 'HALF_DAY';
     }
   }
-  
+
   return 'PRESENT';
 }
 
@@ -273,15 +278,15 @@ export function getAttendanceStatusWithLeave(
   if (isWeekend(date)) {
     return 'WEEKEND';
   }
-  
+
   if (isOnLeave) {
     return 'ON_LEAVE';
   }
-  
+
   if (!hasCheckIn && !isToday(date)) {
     return 'ABSENT';
   }
-  
+
   return 'PRESENT';
 }
 
@@ -315,16 +320,16 @@ export function calculateAverageWorkHours(workHours: number[]): number {
 export function countWorkingDaysInMonth(year: number, month: number): number {
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   let workingDays = 0;
-  
+
   for (let day = 1; day <= daysInMonth; day++) {
     const date = new Date(year, month, day);
     const dateString = date.toISOString().split('T')[0];
-    
+
     if (isWorkingDay(dateString)) {
       workingDays++;
     }
   }
-  
+
   return workingDays;
 }
 
@@ -334,7 +339,7 @@ export function countWorkingDaysInMonth(year: number, month: number): number {
 export function getMonthDateRange(year: number, month: number): { start: string; end: string } {
   const start = new Date(year, month, 1);
   const end = new Date(year, month + 1, 0);
-  
+
   return {
     start: start.toISOString().split('T')[0],
     end: end.toISOString().split('T')[0],
@@ -392,7 +397,7 @@ export function getAttendanceStatusColor(status: AttendanceStatus | string): str
     HOLIDAY: 'bg-purple-100 text-purple-800 border-purple-200',
     Holiday: 'bg-purple-100 text-purple-800 border-purple-200',
   };
-  
+
   return statusMap[status] || 'bg-gray-100 text-gray-800 border-gray-200';
 }
 
@@ -416,7 +421,7 @@ export function getAttendanceStatusIcon(status: AttendanceStatus | string): stri
     HOLIDAY: '🎉',
     Holiday: '🎉',
   };
-  
+
   return iconMap[status] || '•';
 }
 
@@ -425,14 +430,14 @@ export function getAttendanceStatusIcon(status: AttendanceStatus | string): stri
  */
 export function formatDate(date: string, format: 'short' | 'long' = 'short'): string {
   const d = new Date(date);
-  
+
   if (format === 'short') {
     return d.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
     });
   }
-  
+
   return d.toLocaleDateString('en-US', {
     weekday: 'long',
     month: 'long',
@@ -458,7 +463,7 @@ export function formatTime(dateTime: string): string {
  */
 export function getGreeting(): string {
   const hour = new Date().getHours();
-  
+
   if (hour < 12) return 'Good Morning';
   if (hour < 17) return 'Good Afternoon';
   return 'Good Evening';
@@ -470,7 +475,7 @@ export function getGreeting(): string {
 export function getWorkingDayDescription(date: string): string {
   const day = new Date(date).getDay();
   const weekOfMonth = getWeekOfMonth(date);
-  
+
   if (day === 0) return 'Sunday - Weekend';
   if (day === 6) {
     if (isSaturdayWorking(date)) {
@@ -478,7 +483,7 @@ export function getWorkingDayDescription(date: string): string {
     }
     return `Saturday Week ${weekOfMonth} - Weekend`;
   }
-  
+
   const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   return `${dayNames[day]} - Working Day`;
 }
@@ -489,7 +494,7 @@ export function getWorkingDayDescription(date: string): string {
 export function getWorkingSaturdaysInMonth(year: number, month: number): string[] {
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const workingSaturdays: string[] = [];
-  
+
   for (let day = 1; day <= daysInMonth; day++) {
     const date = new Date(year, month, day);
     if (date.getDay() === 6) {
@@ -499,7 +504,7 @@ export function getWorkingSaturdaysInMonth(year: number, month: number): string[
       }
     }
   }
-  
+
   return workingSaturdays;
 }
 
@@ -508,10 +513,10 @@ export function getWorkingSaturdaysInMonth(year: number, month: number): string[
  */
 export function canCheckIn(lastCheckIn?: { date: string; checkOutTime?: string }): boolean {
   if (!lastCheckIn) return true;
-  
+
   // Can check in if last check-in was not today
   if (!isToday(lastCheckIn.date)) return true;
-  
+
   // Can check in if checked out from last session
   return !!lastCheckIn.checkOutTime;
 }
@@ -521,10 +526,10 @@ export function canCheckIn(lastCheckIn?: { date: string; checkOutTime?: string }
  */
 export function canCheckOut(lastCheckIn?: { date: string; checkOutTime?: string }): boolean {
   if (!lastCheckIn) return false;
-  
+
   // Must have checked in today
   if (!isToday(lastCheckIn.date)) return false;
-  
+
   // Must not have checked out yet
   return !lastCheckIn.checkOutTime;
 }
@@ -535,13 +540,13 @@ export function canCheckOut(lastCheckIn?: { date: string; checkOutTime?: string 
 export function getCalendarMonth(year: number, month: number): Date[] {
   const lastDay = new Date(year, month + 1, 0);
   const daysInMonth = lastDay.getDate();
-  
+
   const dates: Date[] = [];
-  
+
   for (let day = 1; day <= daysInMonth; day++) {
     dates.push(new Date(year, month, day));
   }
-  
+
   return dates;
 }
 
@@ -571,24 +576,24 @@ export function calculateAttendanceSummary(
   const presentDays = attendanceRecords.filter(
     (r) => r.status === 'PRESENT' || r.status === 'Present'
   ).length;
-  
+
   const absentDays = countAbsences(attendanceRecords);
   const lateDays = countLateArrivals(attendanceRecords);
-  
+
   const halfDays = attendanceRecords.filter(
     (r) => r.status === 'HALF_DAY' || r.status === 'Half Day'
   ).length;
-  
+
   const leaveDays = attendanceRecords.filter(
     (r) => r.status === 'ON_LEAVE' || r.status === 'On Leave'
   ).length;
-  
+
   const totalWorkHours = calculateTotalWorkHours(attendanceRecords);
   const workHoursArray = attendanceRecords
     .filter((r) => r.workHours && r.workHours > 0)
     .map((r) => r.workHours!);
   const averageWorkHours = calculateAverageWorkHours(workHoursArray);
-  
+
   return {
     totalDays: attendanceRecords.length,
     workingDays: workingDaysInPeriod,
@@ -601,4 +606,131 @@ export function calculateAttendanceSummary(
     totalWorkHours: Math.round(totalWorkHours * 10) / 10,
     averageWorkHours,
   };
+}
+
+// ============================================================================
+// Leave Integration
+// ============================================================================
+
+/**
+ * Check if user is on approved leave for a specific date
+ * @param userId - User ID to check
+ * @param date - Date to check (YYYY-MM-DD format)
+ * @returns Promise<boolean> - True if user is on approved leave
+ */
+export async function isUserOnLeave(userId: string, date: string): Promise<boolean> {
+  if (!userId || !date) return false;
+
+  try {
+    // Query for approved leave requests that cover this date
+    const response = await databases.listDocuments(
+      DATABASE_ID,
+      LEAVE_REQUESTS_COLLECTION_ID,
+      [
+        Query.equal('userId', userId),
+        Query.equal('status', 'APPROVED'),
+        Query.lessThanEqual('startDate', date),
+        Query.greaterThanEqual('endDate', date),
+      ]
+    );
+
+    return response.documents.length > 0;
+  } catch (error) {
+    console.error('Error checking leave status:', error);
+    return false;
+  }
+}
+
+/**
+ * Get all approved leave dates for a user in a date range
+ * @param userId - User ID
+ * @param startDate - Start date (YYYY-MM-DD)
+ * @param endDate - End date (YYYY-MM-DD)
+ * @returns Promise<Set<string>> - Set of dates user is on leave
+ */
+export async function getUserLeaveDates(
+  userId: string,
+  startDate: string,
+  endDate: string
+): Promise<Set<string>> {
+  if (!userId || !startDate || !endDate) return new Set();
+
+  try {
+    // Query for all approved leaves that overlap with the date range
+    const response = await databases.listDocuments(
+      DATABASE_ID,
+      LEAVE_REQUESTS_COLLECTION_ID,
+      [
+        Query.equal('userId', userId),
+        Query.equal('status', 'APPROVED'),
+        // Leave overlaps if: leave.startDate <= endDate AND leave.endDate >= startDate
+        Query.lessThanEqual('startDate', endDate),
+        Query.greaterThanEqual('endDate', startDate),
+      ]
+    );
+
+    const leaveDates = new Set<string>();
+
+    // For each approved leave, add all dates in the range
+    response.documents.forEach((leave: any) => {
+      const leaveStart = new Date(leave.startDate);
+      const leaveEnd = new Date(leave.endDate);
+      const rangeStart = new Date(startDate);
+      const rangeEnd = new Date(endDate);
+
+      // Get the actual start and end dates within our query range
+      const actualStart = leaveStart > rangeStart ? leaveStart : rangeStart;
+      const actualEnd = leaveEnd < rangeEnd ? leaveEnd : rangeEnd;
+
+      // Add each date in the leave period
+      const currentDate = new Date(actualStart);
+      while (currentDate <= actualEnd) {
+        leaveDates.add(currentDate.toISOString().split('T')[0]);
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+    });
+
+    return leaveDates;
+  } catch (error) {
+    console.error('Error fetching leave dates:', error);
+    return new Set();
+  }
+}
+
+// ============================================================================
+// Holiday Utilities
+// ============================================================================
+
+/**
+ * Check if a date is a holiday
+ */
+export function isHoliday(date: string, holidays: Array<{ date: string }>): boolean {
+  return holidays.some(holiday => holiday.date === date);
+}
+
+/**
+ * Get holiday for a specific date
+ */
+export function getHolidayForDate(
+  date: string,
+  holidays: Array<{ date: string; name: string; type: string }>
+): { date: string; name: string; type: string } | undefined {
+  return holidays.find(holiday => holiday.date === date);
+}
+
+/**
+ * Check if a date is a working day (excluding weekends AND holidays)
+ */
+export function isWorkingDayWithHolidays(
+  date: string,
+  holidays?: Array<{ date: string }>
+): boolean {
+  // Check if weekend
+  if (isWeekend(date)) return false;
+
+  // Check if holiday
+  if (holidays && isHoliday(date, holidays)) return false;
+
+  // Otherwise it's a working day
+  return isWorkingDay(date);
 }

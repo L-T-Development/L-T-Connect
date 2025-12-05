@@ -4,9 +4,10 @@
  */
 
 import { Resend } from 'resend';
+import { logger } from '@/lib/logger';
 
 // Only initialize Resend on the server-side
-const resend = typeof window === 'undefined' 
+const resend = typeof window === 'undefined'
   ? new Resend(process.env.RESEND_API_KEY)
   : null;
 
@@ -31,6 +32,15 @@ interface WorkspaceInvitationParams {
 interface PasswordChangedParams {
   name: string;
   email: string;
+}
+
+interface NotificationEmailParams {
+  name: string;
+  email: string;
+  notificationTitle: string;
+  notificationMessage: string;
+  actionUrl?: string;
+  actionText?: string;
 }
 
 /**
@@ -126,14 +136,15 @@ export async function sendWelcomeEmail({
     });
 
     if (error) {
-      console.error('Error sending welcome email:', error);
-      throw new Error(`Failed to send welcome email: ${error.message}`);
+      logger.error('Error sending welcome email', { error });
+      throw new Error(`Failed to send welcome email: ${(error instanceof Error ? error.message : String(error))}`);
     }
 
-    console.log('✅ Welcome email sent to:', email, '- ID:', data?.id);
+    logger.info('Welcome email sent', { email, emailId: data?.id });
     return { success: true, emailId: data?.id };
-  } catch (error: any) {
-    console.error('Failed to send welcome email:', error);
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? (error instanceof Error ? error.message : String(error)) : 'Unknown error';
+    logger.error('Failed to send welcome email', { error: errorMessage });
     throw error;
   }
 }
@@ -225,14 +236,15 @@ export async function sendWorkspaceInvitation({
     });
 
     if (error) {
-      console.error('Error sending workspace invitation:', error);
-      throw new Error(`Failed to send workspace invitation: ${error.message}`);
+      logger.error('Error sending workspace invitation', { error });
+      throw new Error(`Failed to send workspace invitation: ${(error instanceof Error ? error.message : String(error))}`);
     }
 
-    console.log('✅ Workspace invitation sent to:', email, '- ID:', data?.id);
+    logger.info('Workspace invitation sent', { email, emailId: data?.id });
     return { success: true, emailId: data?.id };
-  } catch (error: any) {
-    console.error('Failed to send workspace invitation:', error);
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? (error instanceof Error ? error.message : String(error)) : 'Unknown error';
+    logger.error('Failed to send workspace invitation', { error: errorMessage });
     throw error;
   }
 }
@@ -307,14 +319,15 @@ export async function sendPasswordChangedEmail({
     });
 
     if (error) {
-      console.error('Error sending password changed email:', error);
-      throw new Error(`Failed to send password changed email: ${error.message}`);
+      logger.error('Error sending password changed email', { error });
+      throw new Error(`Failed to send password changed email: ${(error instanceof Error ? error.message : String(error))}`);
     }
 
-    console.log('✅ Password changed email sent to:', email, '- ID:', data?.id);
+    logger.info('Password changed email sent', { email, emailId: data?.id });
     return { success: true, emailId: data?.id };
-  } catch (error: any) {
-    console.error('Failed to send password changed email:', error);
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? (error instanceof Error ? error.message : String(error)) : 'Unknown error';
+    logger.error('Failed to send password changed email', { error: errorMessage });
     throw error;
   }
 }
@@ -327,24 +340,108 @@ export function generateTempPassword(length: number = 12): string {
   const lowercase = 'abcdefghijkmnopqrstuvwxyz'; // Removed l
   const numbers = '23456789'; // Removed 0, 1
   const special = '!@#$%^&*';
-  
+
   const allChars = uppercase + lowercase + numbers + special;
-  
+
   let password = '';
   // Ensure at least one of each type
   password += uppercase[Math.floor(Math.random() * uppercase.length)];
   password += lowercase[Math.floor(Math.random() * lowercase.length)];
   password += numbers[Math.floor(Math.random() * numbers.length)];
   password += special[Math.floor(Math.random() * special.length)];
-  
+
   // Fill the rest randomly
   for (let i = password.length; i < length; i++) {
     password += allChars[Math.floor(Math.random() * allChars.length)];
   }
-  
+
   // Shuffle the password
   return password
     .split('')
     .sort(() => Math.random() - 0.5)
     .join('');
+}
+
+/**
+ * Send notification email for critical notifications
+ */
+export async function sendNotificationEmail({
+  name,
+  email,
+  notificationTitle,
+  notificationMessage,
+  actionUrl,
+  actionText = 'View Details',
+}: NotificationEmailParams) {
+  // Check if running on server-side
+  if (!resend) {
+    logger.warn('Email service called on client-side, skipping');
+    return { success: false, error: 'Email service not available on client-side' };
+  }
+
+  try {
+    const { data, error } = await resend.emails.send({
+      from: FROM_EMAIL,
+      to: email,
+      subject: `${notificationTitle} - L&T Connect`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>${notificationTitle}</title>
+          </head>
+          <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
+              <h1 style="color: white; margin: 0; font-size: 24px;">🔔 ${notificationTitle}</h1>
+            </div>
+            
+            <div style="background: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px; border: 1px solid #e5e7eb;">
+              <p style="font-size: 16px; margin-bottom: 20px;">Hi <strong>${name}</strong>,</p>
+              
+              <div style="background: white; padding: 20px; border-radius: 8px; border-left: 4px solid #667eea; margin: 25px 0;">
+                <p style="margin: 0; font-size: 15px; line-height: 1.6;">${notificationMessage}</p>
+              </div>
+              
+              ${actionUrl ? `
+                <div style="text-align: center; margin: 30px 0;">
+                  <a href="${actionUrl}" 
+                     style="display: inline-block; background: #667eea; color: white; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 16px;">
+                    ${actionText}
+                  </a>
+                </div>
+              ` : ''}
+              
+              <p style="font-size: 14px; color: #6b7280; margin-top: 30px;">
+                This is an automated notification from L&T Connect. You can manage your notification preferences in your account settings.
+              </p>
+              
+              <p style="font-size: 14px; color: #6b7280; margin-top: 20px;">
+                Best regards,<br>
+                <strong>The L&T Connect Team</strong>
+              </p>
+            </div>
+            
+            <div style="text-align: center; padding: 20px; font-size: 12px; color: #9ca3af;">
+              <p>This email was sent by L&T Connect</p>
+              <p>If you did not expect this notification, please contact your workspace administrator.</p>
+            </div>
+          </body>
+        </html>
+      `,
+    });
+
+    if (error) {
+      logger.error('Error sending notification email', { error });
+      throw new Error(`Failed to send notification email: ${error.message}`);
+    }
+
+    logger.info('Notification email sent', { email, emailId: data?.id });
+    return { success: true, emailId: data?.id };
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    logger.error('Failed to send notification email', { error: errorMessage });
+    throw error;
+  }
 }

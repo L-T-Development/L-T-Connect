@@ -121,7 +121,7 @@ export function AIGenerateDialog({
     } catch (error: any) {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to read file',
+        description: (error instanceof Error ? error.message : String(error)) || 'Failed to read file',
         variant: 'destructive',
       });
     }
@@ -155,7 +155,7 @@ export function AIGenerateDialog({
     } catch (error: any) {
       toast({
         title: 'Generation Failed',
-        description: error.message || 'Failed to generate project structure',
+        description: (error instanceof Error ? error.message : String(error)) || 'Failed to generate project structure',
         variant: 'destructive',
       });
       setStep('input');

@@ -1,22 +1,19 @@
 'use client';
 
 import * as React from 'react';
-import { useAuth } from '@/components/providers/auth-provider';
-import { useWorkspaces } from '@/hooks/use-workspace';
+import { useCurrentWorkspace } from '@/hooks/use-current-workspace';
 import { useTeamAnalytics } from '@/hooks/use-analytics';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { MetricCard, HealthBadge } from '@/components/analytics/kpi-widgets';
-import { 
+import {
   BarChart, Bar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
 import { Users, TrendingUp, CheckCircle2, Target, Clock, Award } from 'lucide-react';
 
 export default function TeamPerformancePage() {
-  const { user } = useAuth();
-  const { data: workspaces, isLoading: workspacesLoading } = useWorkspaces(user?.$id);
-  const currentWorkspace = workspaces?.[0];
+  const { currentWorkspace, isLoading: workspacesLoading } = useCurrentWorkspace();
 
   const { data: teamAnalytics, isLoading: analyticsLoading } = useTeamAnalytics(currentWorkspace?.$id);
 
@@ -151,12 +148,12 @@ export default function TeamPerformancePage() {
               <BarChart data={workloadData} layout="horizontal">
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis type="number" />
-                <YAxis 
-                  dataKey="memberId" 
+                <YAxis
+                  dataKey="memberId"
                   type="category"
                   tickFormatter={(value) => `Member ${value.slice(0, 6)}`}
                 />
-                <Tooltip 
+                <Tooltip
                   formatter={(value: any) => [`${value} tasks`, 'Tasks']}
                   labelFormatter={(label) => `Member ${label.slice(0, 8)}`}
                 />
@@ -177,12 +174,12 @@ export default function TeamPerformancePage() {
                 <PolarGrid />
                 <PolarAngleAxis dataKey="name" />
                 <PolarRadiusAxis angle={90} domain={[0, 100]} />
-                <Radar 
-                  name="Completion Rate" 
-                  dataKey="completionRate" 
-                  stroke="#3b82f6" 
-                  fill="#3b82f6" 
-                  fillOpacity={0.6} 
+                <Radar
+                  name="Completion Rate"
+                  dataKey="completionRate"
+                  stroke="#3b82f6"
+                  fill="#3b82f6"
+                  fillOpacity={0.6}
                 />
                 <Tooltip />
                 <Legend />
@@ -248,8 +245,8 @@ export default function TeamPerformancePage() {
                       <span className="font-medium">{member.completionRate.toFixed(1)}%</span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2 dark:bg-gray-700">
-                      <div 
-                        className="bg-blue-500 h-2 rounded-full transition-all" 
+                      <div
+                        className="bg-blue-500 h-2 rounded-full transition-all"
                         style={{ width: `${member.completionRate}%` }}
                       />
                     </div>

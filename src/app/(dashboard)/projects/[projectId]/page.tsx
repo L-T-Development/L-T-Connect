@@ -2,8 +2,7 @@
 
 import * as React from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useAuth } from '@/components/providers/auth-provider';
-import { useWorkspaces } from '@/hooks/use-workspace';
+import { useCurrentWorkspace } from '@/hooks/use-current-workspace';
 import { useProjects } from '@/hooks/use-project';
 import { useTasks } from '@/hooks/use-task';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -38,9 +37,7 @@ const statusConfig: Record<ProjectStatus, { label: string; variant: 'default' | 
 export default function ProjectDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const { user } = useAuth();
-  const { data: workspaces } = useWorkspaces(user?.$id);
-  const currentWorkspace = workspaces?.[0];
+  const { currentWorkspace } = useCurrentWorkspace();
   const { data: projects, isLoading } = useProjects(currentWorkspace?.$id);
   const project = projects?.find(p => p.$id === params.projectId);
   const { data: tasks = [] } = useTasks(project?.$id);
@@ -52,7 +49,7 @@ export default function ProjectDetailPage() {
     const inProgress = tasks.filter(t => t.status === 'IN_PROGRESS').length;
     const todo = tasks.filter(t => t.status === 'TODO' || t.status === 'BACKLOG').length;
     const review = tasks.filter(t => t.status === 'REVIEW').length;
-    
+
     return { total, completed, inProgress, todo, review };
   }, [tasks]);
 
@@ -299,8 +296,8 @@ export default function ProjectDetailPage() {
                           task.status === 'DONE'
                             ? 'success'
                             : task.status === 'IN_PROGRESS'
-                            ? 'default'
-                            : 'secondary'
+                              ? 'default'
+                              : 'secondary'
                         }
                       >
                         {task.status.replace('_', ' ')}

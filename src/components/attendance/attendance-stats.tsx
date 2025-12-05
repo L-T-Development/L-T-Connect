@@ -1,6 +1,7 @@
 'use client';
 
 import { useAuth } from '@/components/providers/auth-provider';
+import { useCurrentWorkspace } from '@/hooks/use-current-workspace';
 import { useAttendanceAnalytics } from '@/hooks/use-attendance';
 import { countWorkingDaysInMonth, getWorkingSaturdaysInMonth } from '@/lib/attendance-utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,12 +15,13 @@ interface AttendanceStatsProps {
 
 export function AttendanceStats({ year, month }: AttendanceStatsProps) {
   const { user } = useAuth();
+  const { currentWorkspace } = useCurrentWorkspace();
   const currentYear = year ?? new Date().getFullYear();
   const currentMonth = month ?? new Date().getMonth();
 
   const { data: analytics, isLoading } = useAttendanceAnalytics(
     user?.$id || '',
-    user?.workspaceId || '',
+    currentWorkspace?.$id || '',
     currentYear,
     currentMonth
   );
@@ -108,7 +110,7 @@ export function AttendanceStats({ year, month }: AttendanceStatsProps) {
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <span>{presentDays} present / {workingDays} working days</span>
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
+              <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                 <div
                   className="bg-gradient-to-r from-green-500 to-green-600 h-2 rounded-full transition-all"
                   style={{ width: `${Math.min(attendanceRate, 100)}%` }}
@@ -157,9 +159,8 @@ export function AttendanceStats({ year, month }: AttendanceStatsProps) {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              <div className={`text-3xl font-bold ${
-                lateDays === 0 ? 'text-green-600' : lateDays <= 2 ? 'text-orange-600' : 'text-red-600'
-              }`}>
+              <div className={`text-3xl font-bold ${lateDays === 0 ? 'text-green-600' : lateDays <= 2 ? 'text-orange-600' : 'text-red-600'
+                }`}>
                 {lateDays}
               </div>
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -194,9 +195,8 @@ export function AttendanceStats({ year, month }: AttendanceStatsProps) {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              <div className={`text-3xl font-bold ${
-                absentDays === 0 ? 'text-green-600' : absentDays <= 1 ? 'text-orange-600' : 'text-red-600'
-              }`}>
+              <div className={`text-3xl font-bold ${absentDays === 0 ? 'text-green-600' : absentDays <= 1 ? 'text-orange-600' : 'text-red-600'
+                }`}>
                 {absentDays}
               </div>
               <div className="flex items-center gap-2 text-xs text-muted-foreground">

@@ -21,12 +21,12 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/components/providers/auth-provider';
 import { NotificationCenter } from '@/components/notifications/notification-center';
-import { TimerWidget } from '@/components/time-tracking/timer-widget';
 import { useNotificationsRealtime } from '@/hooks/use-realtime';
-import { useWorkspaces } from '@/hooks/use-workspace';
+import { useCurrentWorkspace } from '@/hooks/use-current-workspace';
 import { useGlobalSearch, type SearchResult } from '@/hooks/use-global-search';
 import { SearchHighlight } from '@/components/search/search-highlight';
 import { useSearchHistory, TopSearches } from '@/components/search/search-history';
+import { useTeamMembers, ROLE_CONFIG } from '@/hooks/use-team';
 
 const getInitials = (name: string): string => {
   return name
@@ -41,7 +41,7 @@ export function Header() {
   const { theme, setTheme } = useTheme();
   const { user, logout } = useAuth();
   const [mounted, setMounted] = React.useState(false);
-  
+
   // Search state
   const [searchQuery, setSearchQuery] = React.useState('');
   const [debouncedQuery, setDebouncedQuery] = React.useState('');
@@ -51,24 +51,32 @@ export function Header() {
 
   // Enable real-time notifications
   useNotificationsRealtime(user?.$id);
-  
+
   // Get workspace for search
-  const { data: workspaces } = useWorkspaces(user?.$id);
-  const currentWorkspace = workspaces?.[0];
-  
+  const { currentWorkspace } = useCurrentWorkspace();
+
+  // Get team members to find current user's workspace role
+  const { data: teamMembers = [] } = useTeamMembers(currentWorkspace?.$id);
+
+  // Find current user's workspace member record
+  const currentMember = React.useMemo(() => {
+    if (!user || !teamMembers.length) return null;
+    return teamMembers.find(member => member.userId === user.$id);
+  }, [user, teamMembers]);
+
   // Search functionality
   const { data: results = [], isLoading } = useGlobalSearch(
     debouncedQuery,
     currentWorkspace?.$id
   );
-  
+
   const { addToHistory } = useSearchHistory();
 
   // Avoid hydration mismatch
   React.useEffect(() => {
     setMounted(true);
   }, []);
-  
+
   // Debounce search query
   React.useEffect(() => {
     const timer = setTimeout(() => {
@@ -76,14 +84,14 @@ export function Header() {
     }, 300);
     return () => clearTimeout(timer);
   }, [searchQuery]);
-  
+
   // Add to history when results are found
   React.useEffect(() => {
     if (debouncedQuery.trim() && results.length > 0) {
       addToHistory(debouncedQuery, results.length);
     }
   }, [debouncedQuery, results.length, addToHistory]);
-  
+
   // Handle click outside
   React.useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -96,7 +104,7 @@ export function Header() {
         setIsSearchOpen(false);
       }
     };
-    
+
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
@@ -105,11 +113,11 @@ export function Header() {
     await logout();
     router.push('/login');
   };
-  
+
   const handleResultClick = (result: SearchResult) => {
     setIsSearchOpen(false);
     setSearchQuery('');
-    
+
     // Navigate based on type
     switch (result.type) {
       case 'task':
@@ -129,7 +137,7 @@ export function Header() {
         break;
     }
   };
-  
+
   const getIcon = (type: string) => {
     switch (type) {
       case 'task': return CheckSquare;
@@ -140,7 +148,7 @@ export function Header() {
       default: return Search;
     }
   };
-  
+
   const getTypeColor = (type: string) => {
     switch (type) {
       case 'task': return 'bg-blue-500/10 text-blue-600 dark:text-blue-400';
@@ -151,7 +159,7 @@ export function Header() {
       default: return 'bg-gray-500/10 text-gray-600 dark:text-gray-400';
     }
   };
-  
+
   // Group results by type
   const groupedResults = React.useMemo(() => {
     const groups: Record<string, SearchResult[]> = {};
@@ -196,7 +204,7 @@ export function Header() {
             </Button>
           )}
         </div>
-        
+
         {/* Search Results Dropdown */}
         {isSearchOpen && (searchQuery || results.length > 0) && (
           <Card
@@ -217,14 +225,14 @@ export function Header() {
                   </div>
                 </div>
               )}
-              
+
               {isLoading && (
                 <div className="flex items-center justify-center p-8">
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                   <span className="ml-2 text-sm text-muted-foreground">Searching...</span>
                 </div>
               )}
-              
+
               {!isLoading && searchQuery && results.length === 0 && (
                 <div className="p-8 text-center">
                   <Search className="mx-auto h-12 w-12 text-muted-foreground/50" />
@@ -234,13 +242,13 @@ export function Header() {
                   </p>
                 </div>
               )}
-              
+
               {!isLoading && results.length > 0 && (
                 <div className="p-2">
                   <div className="px-3 py-2 text-xs font-semibold text-muted-foreground">
                     Found {results.length} result{results.length !== 1 ? 's' : ''} for "{searchQuery}"
                   </div>
-                  
+
                   {Object.entries(groupedResults).map(([type, items]) => (
                     <div key={type}>
                       <div className="px-3 py-2 text-xs font-semibold text-muted-foreground capitalize">
@@ -311,15 +319,6 @@ export function Header() {
 
       {/* Actions */}
       <div className="flex items-center gap-2">
-        {/* Timer Widget */}
-        {user && (
-          <TimerWidget
-            userId={user.$id}
-            userName={user.name || 'User'}
-            userEmail={user.email}
-          />
-        )}
-
         {/* Theme Toggle */}
         {mounted && (
           <Button
@@ -354,9 +353,9 @@ export function Header() {
               <div className="flex flex-col space-y-1">
                 <p className="text-sm font-medium leading-none">{user?.name || 'User'}</p>
                 <p className="text-xs leading-none text-muted-foreground">{user?.email}</p>
-                {user?.role && (
+                {currentMember?.role && (
                   <Badge variant="outline" className="mt-1 w-fit text-xs">
-                    {user.role.replace('_', ' ')}
+                    {ROLE_CONFIG[currentMember.role].label}
                   </Badge>
                 )}
               </div>

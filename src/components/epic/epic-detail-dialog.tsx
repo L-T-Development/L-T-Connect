@@ -45,7 +45,7 @@ export function EpicDetailDialog({
 }: EpicDetailDialogProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
   const deleteEpic = useDeleteEpic();
-  
+
   // ✅ Load FRs linked to this epic
   const { data: linkedFRs = [] } = useFunctionalRequirementsByEpic(epic.$id);
 
@@ -54,11 +54,11 @@ export function EpicDetailDialog({
     // If we have FRs, calculate from them
     if (linkedFRs.length > 0) {
       const completedFRs = linkedFRs.filter(fr => fr.status === 'DEPLOYED' || fr.status === 'TESTED').length;
-      const inProgressFRs = linkedFRs.filter(fr => 
+      const inProgressFRs = linkedFRs.filter(fr =>
         fr.status === 'APPROVED' || fr.status === 'IMPLEMENTED' || fr.status === 'REVIEW'
       ).length;
       const progress = linkedFRs.length > 0 ? Math.round((completedFRs / linkedFRs.length) * 100) : 0;
-      
+
       // Calculate auto status
       let autoStatus: Epic['status'] = 'TODO';
       if (completedFRs === linkedFRs.length && linkedFRs.length > 0) {
@@ -66,7 +66,7 @@ export function EpicDetailDialog({
       } else if (inProgressFRs > 0 || completedFRs > 0) {
         autoStatus = 'IN_PROGRESS';
       }
-      
+
       return {
         totalFRs: linkedFRs.length,
         completedFRs,
@@ -77,18 +77,18 @@ export function EpicDetailDialog({
         completedTasks: tasks.filter(t => t.status === 'DONE').length,
       };
     }
-    
+
     // Fallback to task-based calculation
     const completedTasks = tasks.filter(t => t.status === 'DONE').length;
     const progress = tasks.length > 0 ? Math.round((completedTasks / tasks.length) * 100) : 0;
-    
+
     let autoStatus: Epic['status'] = 'TODO';
     if (completedTasks === tasks.length && tasks.length > 0) {
       autoStatus = 'DONE';
     } else if (completedTasks > 0) {
       autoStatus = 'IN_PROGRESS';
     }
-    
+
     return {
       totalFRs: 0,
       completedFRs: 0,
@@ -221,7 +221,7 @@ export function EpicDetailDialog({
                         TESTED: 'bg-indigo-500',
                         DEPLOYED: 'bg-green-500',
                       }[fr.status];
-                      
+
                       return (
                         <div
                           key={fr.$id}

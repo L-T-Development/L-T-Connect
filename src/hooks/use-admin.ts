@@ -158,9 +158,9 @@ export function useCreateUser() {
         });
       }
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toast.error('Failed to create user', {
-        description: error.message || 'Please try again',
+        description: (error instanceof Error ? error.message : String(error)) || 'Please try again',
       });
     },
   });

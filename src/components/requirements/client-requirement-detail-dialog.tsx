@@ -33,7 +33,7 @@ import { useClientRequirement, useUpdateClientRequirement, useDeleteClientRequir
 import type { RequirementPriority, RequirementStatus } from '@/types';
 import { CommentSection } from '@/components/comments/comment-section';
 
-const statusConfig: Record<RequirementStatus, { label: string; icon: any; variant: any }> = {
+const statusConfig: Record<RequirementStatus, { label: string; icon: React.ComponentType<{ className?: string }>; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
   DRAFT: { label: 'Draft', icon: FileText, variant: 'secondary' },
   SUBMITTED: { label: 'Submitted', icon: Clock, variant: 'default' },
   APPROVED: { label: 'Approved', icon: CheckCircle2, variant: 'default' },

@@ -192,9 +192,9 @@ export async function generateProjectHierarchy(
     }
 
     return generated;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('AI Generation Error:', error);
-    throw new Error(`Failed to generate project hierarchy: ${error.message}`);
+    throw new Error(`Failed to generate project hierarchy: ${(error instanceof Error ? error.message : String(error))}`);
   }
 }
 
@@ -233,8 +233,8 @@ Document:\n${documentText}`;
     }
 
     return JSON.parse(text);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Document Analysis Error:', error);
-    throw new Error(`Failed to analyze document: ${error.message}`);
+    throw new Error(`Failed to analyze document: ${(error instanceof Error ? error.message : String(error))}`);
   }
 }

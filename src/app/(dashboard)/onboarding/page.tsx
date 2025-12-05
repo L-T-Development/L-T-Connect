@@ -79,7 +79,7 @@ export default function OnboardingPage() {
     } catch (error: any) {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to create workspace',
+        description: (error instanceof Error ? error.message : String(error)) || 'Failed to create workspace',
         variant: 'destructive',
       });
     }

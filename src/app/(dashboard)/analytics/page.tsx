@@ -2,10 +2,10 @@
 
 import * as React from "react";
 import { useSearchParams } from "next/navigation";
-import { 
-  BarChart3, 
-  Users, 
-  FolderKanban, 
+import {
+  BarChart3,
+  Users,
+  FolderKanban,
   Target,
   CheckCircle2,
   AlertTriangle,
@@ -32,11 +32,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MetricCard, HealthBadge } from "@/components/analytics/kpi-widgets";
-import { useAuth } from "@/components/providers/auth-provider";
-import { useWorkspaces } from "@/hooks/use-workspace";
+import { useCurrentWorkspace } from '@/hooks/use-current-workspace';
 import { useProjects } from "@/hooks/use-project";
 import { useWorkspaceTasks } from "@/hooks/use-task";
-import { 
+import {
   useProjectAnalytics,
   useWorkspaceAnalytics,
   useTeamAnalytics
@@ -46,10 +45,8 @@ const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
 
 export default function AnalyticsPage() {
   const searchParams = useSearchParams();
-  const { user } = useAuth();
-  const { data: workspaces, isLoading: workspacesLoading } = useWorkspaces(user?.$id);
-  const currentWorkspace = workspaces?.[0];
-  
+  const { currentWorkspace, isLoading: workspacesLoading } = useCurrentWorkspace();
+
   const { data: projects = [], isLoading: projectsLoading } = useProjects(currentWorkspace?.$id);
   const [selectedProjectId, setSelectedProjectId] = React.useState<string>("");
   const [activeTab, setActiveTab] = React.useState(searchParams.get('view') || 'workspace');
@@ -167,7 +164,7 @@ export default function AnalyticsPage() {
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-sm text-muted-foreground">Overdue Tasks</p>
-                        <p className="text-2xl font-bold">{allTasks.filter((t: any) => 
+                        <p className="text-2xl font-bold">{allTasks.filter((t: any) =>
                           t.dueDate && new Date(t.dueDate) < new Date() && t.status !== 'DONE'
                         ).length}</p>
                       </div>
@@ -211,11 +208,11 @@ export default function AnalyticsPage() {
                       const projectTasks = allTasks.filter((t: any) => t.projectId === project.$id);
                       const completed = projectTasks.filter((t: any) => t.status === 'DONE').length;
                       const total = projectTasks.length;
-                      const overdue = projectTasks.filter((t: any) => 
+                      const overdue = projectTasks.filter((t: any) =>
                         t.dueDate && new Date(t.dueDate) < new Date() && t.status !== 'DONE'
                       ).length;
                       const completionRate = total > 0 ? (completed / total) * 100 : 0;
-                      
+
                       return (
                         <Card key={project.$id}>
                           <CardHeader className="pb-3">
@@ -231,8 +228,8 @@ export default function AnalyticsPage() {
                                 <span className="font-medium">{completionRate.toFixed(0)}%</span>
                               </div>
                               <div className="w-full bg-gray-200 rounded-full h-2 dark:bg-gray-700">
-                                <div 
-                                  className="bg-blue-500 h-2 rounded-full transition-all" 
+                                <div
+                                  className="bg-blue-500 h-2 rounded-full transition-all"
                                   style={{ width: `${completionRate}%` }}
                                 />
                               </div>
@@ -302,10 +299,10 @@ export default function AnalyticsPage() {
                         <YAxis />
                         <Tooltip />
                         <Legend />
-                        <Line 
-                          type="monotone" 
-                          dataKey="completed" 
-                          stroke={COLORS[0]} 
+                        <Line
+                          type="monotone"
+                          dataKey="completed"
+                          stroke={COLORS[0]}
                           strokeWidth={2}
                           name="Tasks Completed"
                         />
@@ -325,7 +322,7 @@ export default function AnalyticsPage() {
                   </CardHeader>
                   <CardContent>
                     <ResponsiveContainer width="100%" height={250}>
-                      <BarChart 
+                      <BarChart
                         data={[
                           { name: 'Critical', value: allTasks.filter((t: any) => t.priority === 'CRITICAL').length },
                           { name: 'High', value: allTasks.filter((t: any) => t.priority === 'HIGH').length },
@@ -398,12 +395,11 @@ export default function AnalyticsPage() {
                                 {project?.name} · Updated {new Date(task.$updatedAt).toLocaleDateString()}
                               </p>
                             </div>
-                            <div className={`px-2 py-1 rounded text-xs font-medium ${
-                              task.status === 'DONE' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
+                            <div className={`px-2 py-1 rounded text-xs font-medium ${task.status === 'DONE' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
                               task.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' :
-                              task.status === 'REVIEW' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200' :
-                              'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200'
-                            }`}>
+                                task.status === 'REVIEW' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200' :
+                                  'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200'
+                              }`}>
                               {task.status.replace('_', ' ')}
                             </div>
                           </div>
@@ -512,7 +508,7 @@ export default function AnalyticsPage() {
                   </CardHeader>
                   <CardContent>
                     <ResponsiveContainer width="100%" height={250}>
-                      <BarChart 
+                      <BarChart
                         data={Object.entries(projectAnalytics.priorityDistribution)
                           .map(([name, value]) => ({ name, value }))}
                       >
@@ -586,8 +582,8 @@ export default function AnalyticsPage() {
                             </div>
                             <div className="flex items-center gap-2 mt-1">
                               <div className="flex-1 bg-gray-200 rounded-full h-2 dark:bg-gray-700">
-                                <div 
-                                  className="bg-green-500 h-2 rounded-full transition-all" 
+                                <div
+                                  className="bg-green-500 h-2 rounded-full transition-all"
                                   style={{ width: `${member.completionRate}%` }}
                                 />
                               </div>
@@ -612,18 +608,18 @@ export default function AnalyticsPage() {
                   <ResponsiveContainer width="100%" height={300}>
                     <BarChart data={teamAnalytics.workloadDistribution}>
                       <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis 
-                        dataKey="memberId" 
+                      <XAxis
+                        dataKey="memberId"
                         tickFormatter={(value: string) => `Member ${value.slice(0, 6)}`}
                       />
                       <YAxis />
-                      <Tooltip 
+                      <Tooltip
                         labelFormatter={(value: string) => `Member ${value.slice(0, 8)}`}
                       />
                       <Legend />
-                      <Bar 
-                        dataKey="taskCount" 
-                        fill={COLORS[1]} 
+                      <Bar
+                        dataKey="taskCount"
+                        fill={COLORS[1]}
                         name="Task Count"
                       />
                     </BarChart>

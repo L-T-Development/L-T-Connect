@@ -13,13 +13,13 @@ export function useProjects(workspaceId?: string) {
     queryKey: ['projects', workspaceId],
     queryFn: async () => {
       if (!workspaceId) return [];
-      
+
       const response = await databases.listDocuments(
         DATABASE_ID,
         PROJECTS_COLLECTION_ID,
         [Query.equal('workspaceId', workspaceId), Query.orderDesc('$createdAt')]
       );
-      
+
       // Parse JSON fields
       const projects = response.documents.map(doc => ({
         ...doc,
@@ -27,7 +27,7 @@ export function useProjects(workspaceId?: string) {
         memberIds: Array.isArray(doc.memberIds) ? doc.memberIds : [doc.memberIds],
         archived: doc.archived ?? false, // Fallback to false if attribute doesn't exist
       })) as unknown as Project[];
-      
+
       return projects;
     },
     enabled: !!workspaceId,
@@ -39,13 +39,13 @@ export function useProject(projectId?: string) {
     queryKey: ['project', projectId],
     queryFn: async () => {
       if (!projectId) return null;
-      
+
       const response = await databases.getDocument(
         DATABASE_ID,
         PROJECTS_COLLECTION_ID,
         projectId
       );
-      
+
       // Parse JSON fields
       const project = {
         ...response,
@@ -53,7 +53,7 @@ export function useProject(projectId?: string) {
         memberIds: Array.isArray(response.memberIds) ? response.memberIds : [response.memberIds],
         archived: response.archived ?? false, // Fallback to false if attribute doesn't exist
       } as unknown as Project;
-      
+
       return project;
     },
     enabled: !!projectId,
@@ -76,8 +76,13 @@ export function useCreateProject() {
       createdBy?: string;
       createdByName?: string;
     }) => {
+      // DEFENSIVE: Validate workspaceId is provided
+      if (!data.workspaceId) {
+        throw new Error('Workspace ID is required. Please select a workspace first.');
+      }
+
       const projectCode = generateProjectCode(data.name);
-      
+
       const projectData = {
         workspaceId: data.workspaceId,
         name: data.name,
@@ -127,7 +132,7 @@ export function useCreateProject() {
     onError: (error: Error) => {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to create project',
+        description: (error instanceof Error ? error.message : String(error)) || 'Failed to create project',
         variant: 'destructive',
       });
     },
@@ -149,13 +154,13 @@ export function useUpdateProject() {
       settings?: Project['settings'];
     }) => {
       const { projectId, workspaceId, ...updates } = data;
-      
+
       // Convert settings to JSON string if provided
       const updateData: any = { ...updates };
       if (updates.settings) {
         updateData.settings = JSON.stringify(updates.settings);
       }
-      
+
       const response = await databases.updateDocument(
         DATABASE_ID,
         PROJECTS_COLLECTION_ID,
@@ -166,8 +171,8 @@ export function useUpdateProject() {
       // Parse response
       const project = {
         ...response,
-        settings: typeof response.settings === 'string' 
-          ? JSON.parse(response.settings) 
+        settings: typeof response.settings === 'string'
+          ? JSON.parse(response.settings)
           : response.settings,
         memberIds: Array.isArray(response.memberIds)
           ? response.memberIds
@@ -187,7 +192,7 @@ export function useUpdateProject() {
     onError: (error: Error) => {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to update project',
+        description: (error instanceof Error ? error.message : String(error)) || 'Failed to update project',
         variant: 'destructive',
       });
     },
@@ -216,7 +221,7 @@ export function useDeleteProject() {
     onError: (error: Error) => {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to delete project',
+        description: (error instanceof Error ? error.message : String(error)) || 'Failed to delete project',
         variant: 'destructive',
       });
     },
@@ -234,7 +239,7 @@ export function useAddProjectMember() {
       currentMembers: string[];
     }) => {
       const updatedMembers = [...data.currentMembers, data.userId];
-      
+
       const response = await databases.updateDocument(
         DATABASE_ID,
         PROJECTS_COLLECTION_ID,
@@ -273,8 +278,8 @@ export function useChangeProjectMethodology() {
 
       const project = {
         ...response,
-        settings: typeof response.settings === 'string' 
-          ? JSON.parse(response.settings) 
+        settings: typeof response.settings === 'string'
+          ? JSON.parse(response.settings)
           : response.settings,
         memberIds: Array.isArray(response.memberIds)
           ? response.memberIds
@@ -294,7 +299,7 @@ export function useChangeProjectMethodology() {
     onError: (error: Error) => {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to change methodology',
+        description: (error instanceof Error ? error.message : String(error)) || 'Failed to change methodology',
         variant: 'destructive',
       });
     },
@@ -326,9 +331,9 @@ export function useArchiveProject() {
         } as unknown as Project;
 
         return project;
-      } catch (error: any) {
+      } catch (error: unknown) {
         // Check if error is due to missing attribute
-        if (error.message?.includes('Unknown attribute') && error.message?.includes('archived')) {
+        if ((error instanceof Error ? error.message : String(error))?.includes('Unknown attribute') && (error instanceof Error ? error.message : String(error))?.includes('archived')) {
           throw new Error('Database schema missing "archived" attribute. Please add it to Projects collection in Appwrite Console. See APPWRITE_SCHEMA_MIGRATION.md for instructions.');
         }
         throw error;
@@ -345,7 +350,7 @@ export function useArchiveProject() {
     onError: (error: Error) => {
       toast({
         title: 'Error archiving project',
-        description: error.message || 'Failed to archive project',
+        description: (error instanceof Error ? error.message : String(error)) || 'Failed to archive project',
         variant: 'destructive',
       });
     },
@@ -377,9 +382,9 @@ export function useRestoreProject() {
         } as unknown as Project;
 
         return project;
-      } catch (error: any) {
+      } catch (error: unknown) {
         // Check if error is due to missing attribute
-        if (error.message?.includes('Unknown attribute') && error.message?.includes('archived')) {
+        if ((error instanceof Error ? error.message : String(error))?.includes('Unknown attribute') && (error instanceof Error ? error.message : String(error))?.includes('archived')) {
           throw new Error('Database schema missing "archived" attribute. Please add it to Projects collection in Appwrite Console. See APPWRITE_SCHEMA_MIGRATION.md for instructions.');
         }
         throw error;
@@ -396,7 +401,7 @@ export function useRestoreProject() {
     onError: (error: Error) => {
       toast({
         title: 'Error restoring project',
-        description: error.message || 'Failed to restore project',
+        description: (error instanceof Error ? error.message : String(error)) || 'Failed to restore project',
         variant: 'destructive',
       });
     },
@@ -427,8 +432,8 @@ export function useCloneProject() {
         // Parse source project
         const parsedSource = {
           ...sourceProject,
-          settings: typeof sourceProject.settings === 'string' 
-            ? JSON.parse(sourceProject.settings) 
+          settings: typeof sourceProject.settings === 'string'
+            ? JSON.parse(sourceProject.settings)
             : sourceProject.settings,
           memberIds: typeof sourceProject.memberIds === 'string'
             ? JSON.parse(sourceProject.memberIds)
@@ -455,11 +460,11 @@ export function useCloneProject() {
             data.includeSettings
               ? parsedSource.settings
               : {
-                  enableTimeTracking: true,
-                  enableCustomFields: false,
-                  autoAssignToCreator: true,
-                  requireEstimates: false,
-                }
+                enableTimeTracking: true,
+                enableCustomFields: false,
+                autoAssignToCreator: true,
+                requireEstimates: false,
+              }
           ),
         };
 
@@ -480,7 +485,7 @@ export function useCloneProject() {
         // Clone tasks if requested
         if (data.includeTasks) {
           const TASKS_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_TASKS_COLLECTION_ID!;
-          
+
           // Get all tasks from source project
           const tasksResponse = await databases.listDocuments(
             DATABASE_ID,
@@ -520,7 +525,7 @@ export function useCloneProject() {
         // Clone sprints if requested
         if (data.includeSprints) {
           const SPRINTS_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_SPRINTS_COLLECTION_ID!;
-          
+
           // Get all sprints from source project
           const sprintsResponse = await databases.listDocuments(
             DATABASE_ID,
@@ -535,7 +540,7 @@ export function useCloneProject() {
               name: sprint.name,
               goal: sprint.goal || '',
               status: 'PLANNED' as const,
-                // capacity removed - sprint workload tracked by task counts
+              // capacity removed - sprint workload tracked by task counts
             };
 
             await databases.createDocument(
@@ -548,13 +553,13 @@ export function useCloneProject() {
         }
 
         return parsedNewProject;
-      } catch (error: any) {
+      } catch (error: unknown) {
         // Check if error is due to missing attribute
-        if (error.message?.includes('Unknown attribute')) {
-          if (error.message?.includes('archived')) {
+        if ((error instanceof Error ? error.message : String(error))?.includes('Unknown attribute')) {
+          if ((error instanceof Error ? error.message : String(error))?.includes('archived')) {
             throw new Error('Database schema missing "archived" attribute. Please add it to Projects collection. See APPWRITE_SCHEMA_MIGRATION.md');
           }
-          if (error.message?.includes('blockedBy') || error.message?.includes('blocks')) {
+          if ((error instanceof Error ? error.message : String(error))?.includes('blockedBy') || (error instanceof Error ? error.message : String(error))?.includes('blocks')) {
             throw new Error('Database schema missing dependency attributes. Please add "blockedBy" and "blocks" to Tasks collection. See APPWRITE_SCHEMA_MIGRATION.md');
           }
         }
@@ -571,7 +576,7 @@ export function useCloneProject() {
     onError: (error: Error) => {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to clone project',
+        description: (error instanceof Error ? error.message : String(error)) || 'Failed to clone project',
         variant: 'destructive',
       });
     },

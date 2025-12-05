@@ -51,7 +51,7 @@ export function SwimlaneView({ tasks, columns, groupBy, onGroupByChange }: Swiml
           key = task.priority || 'NONE';
           break;
         case 'epic':
-          // Tasks don't have epicId directly - would need FR lookup
+          // Tasks don&apos;t have epicId directly - would need FR lookup
           key = 'no-epic';
           break;
         default:

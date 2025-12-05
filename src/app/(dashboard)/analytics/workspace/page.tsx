@@ -2,15 +2,14 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { useAuth } from '@/components/providers/auth-provider';
-import { useWorkspaces } from '@/hooks/use-workspace';
+import { useCurrentWorkspace } from '@/hooks/use-current-workspace';
 import { useWorkspaceAnalytics } from '@/hooks/use-analytics';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { MetricCard, StatComparison } from '@/components/analytics/kpi-widgets';
-import { 
-  LineChart, Line, BarChart, Bar, 
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
+import {
+  LineChart, Line, BarChart, Bar,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
 import {
   BarChart3,
@@ -24,9 +23,7 @@ import {
 } from 'lucide-react';
 
 export default function WorkspaceAnalyticsPage() {
-  const { user } = useAuth();
-  const { data: workspaces, isLoading: workspacesLoading } = useWorkspaces(user?.$id);
-  const currentWorkspace = workspaces?.[0];
+  const { currentWorkspace, isLoading: workspacesLoading } = useCurrentWorkspace();
 
   const { data: analytics, isLoading: analyticsLoading } = useWorkspaceAnalytics(currentWorkspace?.$id);
 
@@ -127,10 +124,10 @@ export default function WorkspaceAnalyticsPage() {
               <YAxis />
               <Tooltip />
               <Legend />
-              <Line 
-                type="monotone" 
-                dataKey="completed" 
-                stroke="#3b82f6" 
+              <Line
+                type="monotone"
+                dataKey="completed"
+                stroke="#3b82f6"
                 strokeWidth={2}
                 name="Tasks Completed"
               />
@@ -148,7 +145,7 @@ export default function WorkspaceAnalyticsPage() {
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={250}>
-              <BarChart 
+              <BarChart
                 data={[
                   { name: 'Active', value: analytics.projects.active },
                   { name: 'Completed', value: analytics.projects.completed },
@@ -180,8 +177,8 @@ export default function WorkspaceAnalyticsPage() {
                 <span className="font-bold">{analytics.time.estimated.toLocaleString()}h</span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2 dark:bg-gray-700">
-                <div 
-                  className="bg-blue-500 h-2 rounded-full" 
+                <div
+                  className="bg-blue-500 h-2 rounded-full"
                   style={{ width: '100%' }}
                 />
               </div>
@@ -193,10 +190,10 @@ export default function WorkspaceAnalyticsPage() {
                 <span className="font-bold">{analytics.time.actual.toLocaleString()}h</span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2 dark:bg-gray-700">
-                <div 
-                  className="bg-green-500 h-2 rounded-full" 
-                  style={{ 
-                    width: `${analytics.time.estimated > 0 ? Math.min((analytics.time.actual / analytics.time.estimated) * 100, 100) : 0}%` 
+                <div
+                  className="bg-green-500 h-2 rounded-full"
+                  style={{
+                    width: `${analytics.time.estimated > 0 ? Math.min((analytics.time.actual / analytics.time.estimated) * 100, 100) : 0}%`
                   }}
                 />
               </div>
@@ -210,8 +207,8 @@ export default function WorkspaceAnalyticsPage() {
                 </span>
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                {analytics.time.efficiency < 100 
-                  ? 'Work completed faster than estimated' 
+                {analytics.time.efficiency < 100
+                  ? 'Work completed faster than estimated'
                   : 'Work taking longer than estimated'}
               </p>
             </div>

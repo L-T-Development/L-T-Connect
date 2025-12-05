@@ -12,14 +12,14 @@ export function useWorkspaces(userId?: string) {
     queryKey: ['workspaces', userId],
     queryFn: async () => {
       if (!userId) return [];
-      
+
       // Query workspaces where user is owner
       const response = await databases.listDocuments(
         DATABASE_ID,
         WORKSPACES_COLLECTION_ID,
         [Query.equal('ownerId', userId)]
       );
-      
+
       // Also query all workspaces and filter by memberIds in client
       // (Appwrite stores memberIds as an array, but we handle both formats for compatibility)
       const allWorkspacesResponse = await databases.listDocuments(
@@ -27,32 +27,32 @@ export function useWorkspaces(userId?: string) {
         WORKSPACES_COLLECTION_ID,
         [Query.limit(100)]
       );
-      
+
       // Filter workspaces where user is a member
       const memberWorkspaces = allWorkspacesResponse.documents.filter((workspace: any) => {
-        const memberIds = Array.isArray(workspace.memberIds) 
-          ? workspace.memberIds 
+        const memberIds = Array.isArray(workspace.memberIds)
+          ? workspace.memberIds
           : [];
         return memberIds.includes(userId);
       });
-      
+
       // Combine and deduplicate
       const allWorkspaces = [...response.documents, ...memberWorkspaces];
       const uniqueWorkspaces = allWorkspaces.filter((workspace, index, self) =>
         index === self.findIndex((w: any) => w.$id === workspace.$id)
       );
-      
+
       // Parse settings JSON
       const parsedWorkspaces = uniqueWorkspaces.map((workspace: any) => ({
         ...workspace,
-        settings: typeof workspace.settings === 'string' 
-          ? JSON.parse(workspace.settings) 
+        settings: typeof workspace.settings === 'string'
+          ? JSON.parse(workspace.settings)
           : workspace.settings,
         memberIds: Array.isArray(workspace.memberIds)
           ? workspace.memberIds
           : [],
       }));
-      
+
       return parsedWorkspaces as unknown as Workspace[];
     },
     enabled: !!userId,
@@ -64,24 +64,24 @@ export function useWorkspace(workspaceId?: string) {
     queryKey: ['workspace', workspaceId],
     queryFn: async () => {
       if (!workspaceId) return null;
-      
+
       const response = await databases.getDocument(
         DATABASE_ID,
         WORKSPACES_COLLECTION_ID,
         workspaceId
       );
-      
+
       // Parse JSON fields
       const workspace = {
         ...response,
-        settings: typeof response.settings === 'string' 
-          ? JSON.parse(response.settings) 
+        settings: typeof response.settings === 'string'
+          ? JSON.parse(response.settings)
           : response.settings,
         memberIds: Array.isArray(response.memberIds)
           ? response.memberIds
           : [],
       };
-      
+
       return workspace as unknown as Workspace;
     },
     enabled: !!workspaceId,
@@ -141,17 +141,52 @@ export function useCreateWorkspace() {
 
       return workspace as unknown as Workspace;
     },
-    onSuccess: () => {
+    onSuccess: (newWorkspace) => {
+      // 1. Invalidate workspace list
       queryClient.invalidateQueries({ queryKey: ['workspaces'] });
+
+      // 2. CRITICAL: Clear ALL workspace-scoped cached data to prevent leakage
+      // This ensures the new workspace starts completely empty
+      queryClient.removeQueries({ queryKey: ['projects'] });
+      queryClient.removeQueries({ queryKey: ['project'] });
+      queryClient.removeQueries({ queryKey: ['tasks'] });
+      queryClient.removeQueries({ queryKey: ['task'] });
+      queryClient.removeQueries({ queryKey: ['workspace-tasks'] });
+      queryClient.removeQueries({ queryKey: ['epics'] });
+      queryClient.removeQueries({ queryKey: ['epic'] });
+      queryClient.removeQueries({ queryKey: ['sprints'] });
+      queryClient.removeQueries({ queryKey: ['sprint'] });
+      queryClient.removeQueries({ queryKey: ['workspace-sprints'] });
+      queryClient.removeQueries({ queryKey: ['requirements'] });
+      queryClient.removeQueries({ queryKey: ['functional-requirements'] });
+      queryClient.removeQueries({ queryKey: ['functional-requirement'] });
+      queryClient.removeQueries({ queryKey: ['client-requirements'] });
+      queryClient.removeQueries({ queryKey: ['client-requirement'] });
+      queryClient.removeQueries({ queryKey: ['attendance'] });
+      queryClient.removeQueries({ queryKey: ['leave-requests'] });
+      queryClient.removeQueries({ queryKey: ['leave-request'] });
+      queryClient.removeQueries({ queryKey: ['notifications'] });
+      queryClient.removeQueries({ queryKey: ['analytics'] });
+      queryClient.removeQueries({ queryKey: ['workspace-analytics'] });
+      queryClient.removeQueries({ queryKey: ['team'] });
+      queryClient.removeQueries({ queryKey: ['workspace-members'] });
+      queryClient.removeQueries({ queryKey: ['activity'] });
+      queryClient.removeQueries({ queryKey: ['comments'] });
+      queryClient.removeQueries({ queryKey: ['time-entries'] });
+
+      // 3. ✨ CRITICAL: Set new workspace as current workspace
+      // This ensures the newly created workspace becomes active immediately
+      localStorage.setItem('currentWorkspaceId', newWorkspace.$id);
+
       toast({
         title: 'Success',
-        description: 'Workspace created successfully!',
+        description: `Workspace "${newWorkspace.name}" created successfully!`,
       });
     },
     onError: (error: Error) => {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to create workspace',
+        description: (error instanceof Error ? error.message : String(error)) || 'Failed to create workspace',
         variant: 'destructive',
       });
     },
@@ -169,13 +204,13 @@ export function useUpdateWorkspace() {
       settings?: Workspace['settings'];
     }) => {
       const { workspaceId, ...updates } = data;
-      
+
       // Convert settings to JSON string if provided
       const updateData: any = { ...updates };
       if (updates.settings) {
         updateData.settings = JSON.stringify(updates.settings);
       }
-      
+
       const response = await databases.updateDocument(
         DATABASE_ID,
         WORKSPACES_COLLECTION_ID,
@@ -186,8 +221,8 @@ export function useUpdateWorkspace() {
       // Parse the response
       const workspace = {
         ...response,
-        settings: typeof response.settings === 'string' 
-          ? JSON.parse(response.settings) 
+        settings: typeof response.settings === 'string'
+          ? JSON.parse(response.settings)
           : response.settings,
         memberIds: Array.isArray(response.memberIds)
           ? response.memberIds
@@ -207,7 +242,7 @@ export function useUpdateWorkspace() {
     onError: (error: Error) => {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to update workspace',
+        description: (error instanceof Error ? error.message : String(error)) || 'Failed to update workspace',
         variant: 'destructive',
       });
     },
@@ -221,7 +256,7 @@ export function useDeleteWorkspace() {
     mutationFn: async (workspaceId: string) => {
       const { Query } = await import('appwrite');
       const { COLLECTIONS } = await import('@/lib/appwrite-config');
-      
+
       // Cascade delete all workspace-related data
       try {
         // Delete all projects in the workspace
@@ -230,22 +265,22 @@ export function useDeleteWorkspace() {
           COLLECTIONS.PROJECTS,
           [Query.equal('workspaceId', workspaceId), Query.limit(500)]
         );
-        
+
         for (const project of projectsQuery.documents) {
           await databases.deleteDocument(DATABASE_ID, COLLECTIONS.PROJECTS, project.$id);
         }
-        
+
         // Delete all tasks
         const tasksQuery = await databases.listDocuments(
           DATABASE_ID,
           COLLECTIONS.TASKS,
           [Query.equal('workspaceId', workspaceId), Query.limit(500)]
         );
-        
+
         for (const task of tasksQuery.documents) {
           await databases.deleteDocument(DATABASE_ID, COLLECTIONS.TASKS, task.$id);
         }
-        
+
         // Delete all epics
         try {
           const epicsQuery = await databases.listDocuments(
@@ -253,14 +288,14 @@ export function useDeleteWorkspace() {
             COLLECTIONS.EPICS,
             [Query.equal('workspaceId', workspaceId), Query.limit(500)]
           );
-          
+
           for (const epic of epicsQuery.documents) {
             await databases.deleteDocument(DATABASE_ID, COLLECTIONS.EPICS, epic.$id);
           }
         } catch (error) {
           console.warn('Error deleting epics:', error);
         }
-        
+
         // Delete all sprints
         try {
           const sprintsQuery = await databases.listDocuments(
@@ -268,14 +303,14 @@ export function useDeleteWorkspace() {
             COLLECTIONS.SPRINTS,
             [Query.equal('workspaceId', workspaceId), Query.limit(500)]
           );
-          
+
           for (const sprint of sprintsQuery.documents) {
             await databases.deleteDocument(DATABASE_ID, COLLECTIONS.SPRINTS, sprint.$id);
           }
         } catch (error) {
           console.warn('Error deleting sprints:', error);
         }
-        
+
         // Delete all requirements
         try {
           const requirementsQuery = await databases.listDocuments(
@@ -283,28 +318,28 @@ export function useDeleteWorkspace() {
             COLLECTIONS.FUNCTIONAL_REQUIREMENTS,
             [Query.equal('workspaceId', workspaceId), Query.limit(500)]
           );
-          
+
           for (const req of requirementsQuery.documents) {
             await databases.deleteDocument(DATABASE_ID, COLLECTIONS.FUNCTIONAL_REQUIREMENTS, req.$id);
           }
         } catch (error) {
           console.warn('Error deleting functional requirements:', error);
         }
-        
+
         try {
           const clientReqsQuery = await databases.listDocuments(
             DATABASE_ID,
             COLLECTIONS.CLIENT_REQUIREMENTS,
             [Query.equal('workspaceId', workspaceId), Query.limit(500)]
           );
-          
+
           for (const req of clientReqsQuery.documents) {
             await databases.deleteDocument(DATABASE_ID, COLLECTIONS.CLIENT_REQUIREMENTS, req.$id);
           }
         } catch (error) {
           console.warn('Error deleting client requirements:', error);
         }
-        
+
         // Delete attendance records
         try {
           const attendanceQuery = await databases.listDocuments(
@@ -312,14 +347,14 @@ export function useDeleteWorkspace() {
             COLLECTIONS.ATTENDANCE,
             [Query.equal('workspaceId', workspaceId), Query.limit(500)]
           );
-          
+
           for (const record of attendanceQuery.documents) {
             await databases.deleteDocument(DATABASE_ID, COLLECTIONS.ATTENDANCE, record.$id);
           }
         } catch (error) {
           console.warn('Error deleting attendance records:', error);
         }
-        
+
         // Delete leave requests
         try {
           const leaveQuery = await databases.listDocuments(
@@ -327,14 +362,14 @@ export function useDeleteWorkspace() {
             COLLECTIONS.LEAVE_REQUESTS,
             [Query.equal('workspaceId', workspaceId), Query.limit(500)]
           );
-          
+
           for (const leave of leaveQuery.documents) {
             await databases.deleteDocument(DATABASE_ID, COLLECTIONS.LEAVE_REQUESTS, leave.$id);
           }
         } catch (error) {
           console.warn('Error deleting leave requests:', error);
         }
-        
+
         // Delete notifications
         try {
           const notificationsQuery = await databases.listDocuments(
@@ -342,14 +377,14 @@ export function useDeleteWorkspace() {
             COLLECTIONS.NOTIFICATIONS,
             [Query.equal('workspaceId', workspaceId), Query.limit(500)]
           );
-          
+
           for (const notification of notificationsQuery.documents) {
             await databases.deleteDocument(DATABASE_ID, COLLECTIONS.NOTIFICATIONS, notification.$id);
           }
         } catch (error) {
           console.warn('Error deleting notifications:', error);
         }
-        
+
         // Delete workspace members (if collection exists)
         try {
           const MEMBERS_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_COLLECTION_WORKSPACE_MEMBERS_ID;
@@ -359,7 +394,7 @@ export function useDeleteWorkspace() {
               MEMBERS_COLLECTION_ID,
               [Query.equal('workspaceId', workspaceId), Query.limit(500)]
             );
-            
+
             for (const member of membersQuery.documents) {
               await databases.deleteDocument(DATABASE_ID, MEMBERS_COLLECTION_ID, member.$id);
             }
@@ -367,7 +402,7 @@ export function useDeleteWorkspace() {
         } catch (error) {
           console.warn('Error deleting workspace members:', error);
         }
-        
+
         // Delete email invitations (if collection exists)
         try {
           const EMAIL_INVITATIONS_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_COLLECTION_EMAIL_INVITATIONS_ID;
@@ -377,7 +412,7 @@ export function useDeleteWorkspace() {
               EMAIL_INVITATIONS_COLLECTION_ID,
               [Query.equal('workspaceId', workspaceId), Query.limit(500)]
             );
-            
+
             for (const invitation of invitationsQuery.documents) {
               await databases.deleteDocument(DATABASE_ID, EMAIL_INVITATIONS_COLLECTION_ID, invitation.$id);
             }
@@ -385,7 +420,7 @@ export function useDeleteWorkspace() {
         } catch (error) {
           console.warn('Error deleting email invitations:', error);
         }
-        
+
         // Delete invite codes (if collection exists)
         try {
           const INVITE_CODES_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_COLLECTION_INVITE_CODES_ID;
@@ -395,7 +430,7 @@ export function useDeleteWorkspace() {
               INVITE_CODES_COLLECTION_ID,
               [Query.equal('workspaceId', workspaceId), Query.limit(500)]
             );
-            
+
             for (const code of codesQuery.documents) {
               await databases.deleteDocument(DATABASE_ID, INVITE_CODES_COLLECTION_ID, code.$id);
             }
@@ -403,7 +438,7 @@ export function useDeleteWorkspace() {
         } catch (error) {
           console.warn('Error deleting invite codes:', error);
         }
-        
+
         // Delete time entries (if collection exists)
         try {
           const TIME_ENTRIES_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_COLLECTION_TIME_ENTRIES_ID;
@@ -413,7 +448,7 @@ export function useDeleteWorkspace() {
               TIME_ENTRIES_COLLECTION_ID,
               [Query.equal('workspaceId', workspaceId), Query.limit(500)]
             );
-            
+
             for (const entry of timeEntriesQuery.documents) {
               await databases.deleteDocument(DATABASE_ID, TIME_ENTRIES_COLLECTION_ID, entry.$id);
             }
@@ -421,7 +456,7 @@ export function useDeleteWorkspace() {
         } catch (error) {
           console.warn('Error deleting time entries:', error);
         }
-        
+
         // Delete active timers (if collection exists)
         try {
           const ACTIVE_TIMERS_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_COLLECTION_ACTIVE_TIMERS_ID;
@@ -431,7 +466,7 @@ export function useDeleteWorkspace() {
               ACTIVE_TIMERS_COLLECTION_ID,
               [Query.equal('workspaceId', workspaceId), Query.limit(500)]
             );
-            
+
             for (const timer of timersQuery.documents) {
               await databases.deleteDocument(DATABASE_ID, ACTIVE_TIMERS_COLLECTION_ID, timer.$id);
             }
@@ -439,7 +474,7 @@ export function useDeleteWorkspace() {
         } catch (error) {
           console.warn('Error deleting active timers:', error);
         }
-        
+
         // Delete task comments (if collection exists)
         try {
           const taskCommentsQuery = await databases.listDocuments(
@@ -447,14 +482,14 @@ export function useDeleteWorkspace() {
             COLLECTIONS.TASK_COMMENTS,
             [Query.equal('workspaceId', workspaceId), Query.limit(500)]
           );
-          
+
           for (const comment of taskCommentsQuery.documents) {
             await databases.deleteDocument(DATABASE_ID, COLLECTIONS.TASK_COMMENTS, comment.$id);
           }
         } catch (error) {
           console.warn('Error deleting task comments:', error);
         }
-        
+
         // Finally, delete the workspace itself
         await databases.deleteDocument(
           DATABASE_ID,
@@ -476,7 +511,7 @@ export function useDeleteWorkspace() {
     onError: (error: Error) => {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to delete workspace',
+        description: (error instanceof Error ? error.message : String(error)) || 'Failed to delete workspace',
         variant: 'destructive',
       });
     },
@@ -526,7 +561,7 @@ export function useInviteMember() {
       // Store invitation in database for tracking
       // You can create a separate collection for invitations if needed
       // For now, we'll just return the data
-      
+
       return { ...data, inviteCode, emailSent: true };
     },
     onSuccess: (_result, variables) => {
@@ -539,7 +574,7 @@ export function useInviteMember() {
     onError: (error: Error) => {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to send invitation',
+        description: (error instanceof Error ? error.message : String(error)) || 'Failed to send invitation',
         variant: 'destructive',
       });
     },
@@ -550,8 +585,8 @@ export function useJoinWorkspace() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (data: { 
-      inviteCode: string; 
+    mutationFn: async (data: {
+      inviteCode: string;
       userId: string;
       userName: string;
       userEmail: string;
@@ -580,7 +615,7 @@ export function useJoinWorkspace() {
       const currentMembers = Array.isArray(workspace.memberIds)
         ? workspace.memberIds
         : [];
-        
+
       if (currentMembers.includes(data.userId)) {
         throw new Error('You are already a member of this workspace');
       }
@@ -628,10 +663,10 @@ export function useJoinWorkspace() {
         description: 'Your join request has been sent to the workspace owner for approval',
       });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to join workspace',
+        description: (error instanceof Error ? error.message : String(error)) || 'Failed to join workspace',
         variant: 'destructive',
       });
       throw error;
@@ -654,14 +689,14 @@ export function useWorkspaceMembers(workspaceId?: string) {
       );
 
       const memberIds = Array.isArray(workspace.memberIds) ? workspace.memberIds : [];
-      
+
       if (memberIds.length === 0) return [];
 
       // Fetch user details from the users collection
       // Note: This assumes you have a users collection set up
       // If not, you'll need to adapt this to your user management system
       const USERS_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_USERS_COLLECTION_ID;
-      
+
       if (!USERS_COLLECTION_ID) {
         // Fallback: return basic user objects with just IDs
         return memberIds.map((id: string) => ({
@@ -680,7 +715,7 @@ export function useWorkspaceMembers(workspaceId?: string) {
         );
 
         // Filter to only members of this workspace
-        const members = usersResponse.documents.filter((user: any) => 
+        const members = usersResponse.documents.filter((user: any) =>
           memberIds.includes(user.$id)
         );
 

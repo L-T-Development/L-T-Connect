@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
-import { CheckCircle2, Calendar, Columns3, AlertTriangle } from "lucide-react";
+import { CheckCircle2, Calendar, AlertTriangle } from "lucide-react";
 import type { ProjectMethodology } from "@/types";
 
 interface MethodologySelectorProps {
@@ -41,23 +41,6 @@ const methodologies = [
     color: "text-blue-600",
     bgColor: "bg-blue-50 dark:bg-blue-950",
     borderColor: "border-blue-200 dark:border-blue-800",
-  },
-  {
-    value: "KANBAN" as ProjectMethodology,
-    label: "Kanban",
-    icon: Columns3,
-    description: "Continuous flow with visual workflow and WIP limits",
-    features: [
-      "Continuous delivery",
-      "Work-in-progress limits",
-      "Custom board columns",
-      "Cumulative flow diagram",
-      "Lead/Cycle time metrics",
-    ],
-    bestFor: "Support teams or continuous delivery workflows",
-    color: "text-green-600",
-    bgColor: "bg-green-50 dark:bg-green-950",
-    borderColor: "border-green-200 dark:border-green-800",
   },
 ];
 
@@ -114,11 +97,10 @@ export function MethodologySelector({
             return (
               <Card
                 key={methodology.value}
-                className={`relative cursor-pointer transition-all ${
-                  isSelected
-                    ? `${methodology.borderColor} border-2 ${methodology.bgColor}`
-                    : "border hover:border-gray-300 dark:hover:border-gray-600"
-                }`}
+                className={`relative cursor-pointer transition-all ${isSelected
+                  ? `${methodology.borderColor} border-2 ${methodology.bgColor}`
+                  : "border hover:border-gray-300 dark:hover:border-gray-600"
+                  }`}
                 onClick={() => setSelected(methodology.value)}
               >
                 <div className="p-6">

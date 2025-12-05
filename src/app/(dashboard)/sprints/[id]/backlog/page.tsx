@@ -90,7 +90,7 @@ export default function SprintBacklogPage() {
         return scoreB - scoreA; // Higher priority first
       });
     } else if (sortMode === 'created') {
-      filtered = [...filtered].sort((a, b) => 
+      filtered = [...filtered].sort((a, b) =>
         new Date(b.$createdAt).getTime() - new Date(a.$createdAt).getTime()
       );
     } else {
@@ -131,7 +131,7 @@ export default function SprintBacklogPage() {
       if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
         // Reorder tasks
         const reordered = arrayMove(filteredBacklogTasks, oldIndex, newIndex);
-        
+
         // Update positions
         const updates = reordered.map((task, index) => ({
           taskId: task.$id,
@@ -143,7 +143,7 @@ export default function SprintBacklogPage() {
             tasks: updates,
             projectId: task.projectId,
           });
-          
+
           toast({
             title: 'Task reordered',
             description: 'Backlog order updated successfully',
@@ -157,7 +157,7 @@ export default function SprintBacklogPage() {
 
     // Determine new sprint assignment
     let newSprintId: string | undefined;
-    
+
     if (targetId === 'sprint-container') {
       newSprintId = sprintId;
     } else if (targetId === 'backlog-container') {
@@ -176,7 +176,7 @@ export default function SprintBacklogPage() {
           projectId: task.projectId,
           updates: { sprintId: newSprintId },
         });
-        
+
         toast({
           title: newSprintId ? 'Task added to sprint' : 'Task moved to backlog',
           description: task.title,
@@ -198,7 +198,7 @@ export default function SprintBacklogPage() {
         projectId: fr.projectId,
         updates: { sprintId: sprintId },
       });
-      
+
       toast({
         title: 'FR assigned to sprint',
         description: `${fr.hierarchyId} - ${fr.title}`,
@@ -223,7 +223,7 @@ export default function SprintBacklogPage() {
         projectId: fr.projectId,
         updates: { sprintId: '' },
       });
-      
+
       toast({
         title: 'FR removed from sprint',
         description: `${fr.hierarchyId} - ${fr.title}`,
@@ -273,7 +273,7 @@ export default function SprintBacklogPage() {
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back to Sprints
           </Button>
-          
+
           <div className="flex items-start justify-between">
             <div>
               <h1 className="text-3xl font-bold tracking-tight">{sprint.name}</h1>
@@ -309,7 +309,7 @@ export default function SprintBacklogPage() {
               className="pl-10"
             />
           </div>
-          
+
           <Select value={priorityFilter} onValueChange={setPriorityFilter}>
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="Filter by priority" />
@@ -353,21 +353,21 @@ export default function SprintBacklogPage() {
         {/* Sprint Capacity Card */}
         <Card>
           <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <span>Sprint Capacity</span>
-                <Badge variant={capacityPercentage > 100 ? 'destructive' : 'secondary'}>
-                  {completedSprintTasks} / {totalSprintTasks} tasks ({capacityPercentage}%)
-                </Badge>
-              </CardTitle>
-              <CardDescription>
-                {sprintTasks.length} tasks in sprint
-                {capacityPercentage > 100 && (
-                  <span className="text-destructive ml-2">⚠ Over capacity!</span>
-                )}
-                {sortMode === 'manual' && (
-                  <span className="text-primary ml-2">• Drag to reorder backlog items</span>
-                )}
-              </CardDescription>
+            <CardTitle className="flex items-center justify-between">
+              <span>Sprint Capacity</span>
+              <Badge variant={capacityPercentage > 100 ? 'destructive' : 'secondary'}>
+                {completedSprintTasks} / {totalSprintTasks} tasks ({capacityPercentage}%)
+              </Badge>
+            </CardTitle>
+            <CardDescription>
+              {sprintTasks.length} tasks in sprint
+              {capacityPercentage > 100 && (
+                <span className="text-destructive ml-2">⚠ Over capacity!</span>
+              )}
+              {sortMode === 'manual' && (
+                <span className="text-primary ml-2">• Drag to reorder backlog items</span>
+              )}
+            </CardDescription>
           </CardHeader>
         </Card>
 
@@ -467,7 +467,7 @@ export default function SprintBacklogPage() {
 
       <DragOverlay>
         {activeDragTask ? (
-          <div className="p-4 bg-white border rounded-lg shadow-lg">
+          <div className="p-4 bg-white dark:bg-gray-800 border rounded-lg shadow-lg">
             <p className="font-medium">{activeDragTask.title}</p>
             <p className="text-xs text-muted-foreground">{activeDragTask.hierarchyId}</p>
           </div>

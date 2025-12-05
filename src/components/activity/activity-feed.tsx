@@ -64,7 +64,7 @@ interface ActivityFeedProps {
 }
 
 // Activity configuration with icons and colors
-const activityConfig: Record<ActivityType, { icon: any; color: string; label: string }> = {
+const activityConfig: Record<ActivityType, { icon: React.ComponentType<{ className?: string }>; color: string; label: string }> = {
   task_created: { icon: FileText, color: 'text-blue-500', label: 'Task Created' },
   task_updated: { icon: Edit, color: 'text-yellow-500', label: 'Task Updated' },
   task_deleted: { icon: Trash2, color: 'text-red-500', label: 'Task Deleted' },
@@ -95,7 +95,7 @@ export function ActivityFeed({
   React.useEffect(() => {
     const fetchActivities = async () => {
       setIsLoading(true);
-      
+
       // TODO: Replace with actual Appwrite query
       // const response = await databases.listDocuments(
       //   DATABASE_ID,

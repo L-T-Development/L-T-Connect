@@ -215,25 +215,54 @@ export function useCreateLeaveRequest() {
 
       return leaveRequest as unknown as LeaveRequest;
     },
-    onSuccess: async (_leaveRequest, variables) => {
+    onSuccess: async (leaveRequest, variables) => {
       queryClient.invalidateQueries({ queryKey: ['leaveRequests', variables.userId] });
       queryClient.invalidateQueries({ queryKey: ['teamLeaveRequests'] });
-      
-      // TODO: Notify managers about new leave request
-      // For now, we'll need to pass managerIds from the component
-      // await createBulkNotifications({
-      //   workspaceId: leaveRequest.workspaceId || '',
-      //   userIds: managerIds,
-      //   type: 'LEAVE_REQUESTED',
-      //   data: {
-      //     leaveId: leaveRequest.$id,
-      //     employeeName: 'Employee Name',
-      //     leaveType: variables.leaveType,
-      //     days: calculateLeaveDays(variables.startDate, variables.endDate, variables.halfDay),
-      //     entityType: 'LEAVE',
-      //   },
-      // });
-      
+
+      // Notify managers about new leave request
+      if (variables.workspaceId) {
+        try {
+          // Query workspace members to find managers/admins
+          const WORKSPACE_MEMBERS_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_COLLECTION_WORKSPACE_MEMBERS_ID!;
+          const membersResponse = await databases.listDocuments(
+            DATABASE_ID,
+            WORKSPACE_MEMBERS_COLLECTION_ID,
+            [Query.equal('workspaceId', variables.workspaceId)]
+          );
+
+          // Filter for managers and admins
+          const managers = membersResponse.documents
+            .filter((member: any) => {
+              const role = member.role?.toLowerCase() || '';
+              return role.includes('manager') || role.includes('admin') || role === 'owner';
+            })
+            .map((member: any) => member.userId)
+            .filter((userId: string) => userId && userId !== variables.userId); // Exclude the requester
+
+          // Send notifications to managers
+          if (managers.length > 0) {
+            const { createBulkNotifications } = await import('@/hooks/use-notification');
+            await createBulkNotifications({
+              workspaceId: variables.workspaceId,
+              userIds: managers,
+              type: 'LEAVE_REQUESTED',
+              data: {
+                leaveId: leaveRequest.$id,
+                employeeName: variables.createdByName || 'Employee',
+                leaveType: variables.leaveType,
+                days: calculateLeaveDays(variables.startDate, variables.endDate, variables.halfDay),
+                startDate: variables.startDate,
+                endDate: variables.endDate,
+                entityType: 'LEAVE',
+              },
+            });
+          }
+        } catch (error) {
+          // Don't fail the leave request if notification fails
+          console.error('Failed to notify managers:', error);
+        }
+      }
+
       toast({
         title: 'Leave Request Submitted',
         description: 'Your leave request has been submitted for approval.',
@@ -242,7 +271,7 @@ export function useCreateLeaveRequest() {
     onError: (error: Error) => {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to submit leave request',
+        description: (error instanceof Error ? error.message : String(error)) || 'Failed to submit leave request',
         variant: 'destructive',
       });
     },
@@ -361,14 +390,14 @@ export function useApproveLeave() {
       queryClient.invalidateQueries({ queryKey: ['leaveRequests'] });
       queryClient.invalidateQueries({ queryKey: ['teamLeaveRequests'] });
       queryClient.invalidateQueries({ queryKey: ['leaveBalance'] });
-      
+
       // Get leave request details from DB
       const leaveDoc = await databases.getDocument(
         DATABASE_ID,
         LEAVE_REQUESTS_COLLECTION_ID,
         variables.leaveRequestId
       ) as any;
-      
+
       // Send in-app notification to employee
       await createNotificationFromTemplate({
         workspaceId: leaveDoc.workspaceId || '',
@@ -382,7 +411,7 @@ export function useApproveLeave() {
           entityType: 'LEAVE',
         },
       });
-      
+
       toast({
         title: 'Leave Approved',
         description: 'Leave request has been approved and the employee has been notified.',
@@ -391,7 +420,7 @@ export function useApproveLeave() {
     onError: (error: Error) => {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to approve leave request',
+        description: (error instanceof Error ? error.message : String(error)) || 'Failed to approve leave request',
         variant: 'destructive',
       });
     },
@@ -475,14 +504,14 @@ export function useRejectLeave() {
     onSuccess: async (_leaveRequest, variables) => {
       queryClient.invalidateQueries({ queryKey: ['leaveRequests'] });
       queryClient.invalidateQueries({ queryKey: ['teamLeaveRequests'] });
-      
+
       // Get leave request details from DB
       const leaveDoc = await databases.getDocument(
         DATABASE_ID,
         LEAVE_REQUESTS_COLLECTION_ID,
         variables.leaveRequestId
       ) as any;
-      
+
       // Send in-app notification to employee
       await createNotificationFromTemplate({
         workspaceId: leaveDoc.workspaceId || '',
@@ -496,7 +525,7 @@ export function useRejectLeave() {
           entityType: 'LEAVE',
         },
       });
-      
+
       toast({
         title: 'Leave Rejected',
         description: 'Leave request has been rejected and the employee has been notified.',
@@ -505,7 +534,7 @@ export function useRejectLeave() {
     onError: (error: Error) => {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to reject leave request',
+        description: (error instanceof Error ? error.message : String(error)) || 'Failed to reject leave request',
         variant: 'destructive',
       });
     },
@@ -526,6 +555,19 @@ export function useCancelLeaveRequest() {
         LEAVE_REQUESTS_COLLECTION_ID,
         leaveRequestId
       )) as any;
+
+      // Validate: Prevent cancellation of past or ongoing leaves
+      const today = new Date();
+      today.setHours(0, 0, 0, 0); // Reset time to start of day
+
+      const leaveStartDate = new Date(leaveRequest.startDate);
+      leaveStartDate.setHours(0, 0, 0, 0);
+
+      if (leaveStartDate <= today) {
+        throw new Error(
+          'Cannot cancel leave that has already started or is in the past. Please contact your manager for assistance.'
+        );
+      }
 
       // Update status
       await databases.updateDocument(
@@ -582,7 +624,7 @@ export function useCancelLeaveRequest() {
     onError: (error: Error) => {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to cancel leave request',
+        description: (error instanceof Error ? error.message : String(error)) || 'Failed to cancel leave request',
         variant: 'destructive',
       });
     },

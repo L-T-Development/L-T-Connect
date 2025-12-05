@@ -300,10 +300,10 @@ export function useCreateFunctionalRequirement() {
         description: 'Functional requirement created successfully!',
       });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to create functional requirement',
+        description: (error instanceof Error ? error.message : String(error)) || 'Failed to create functional requirement',
         variant: 'destructive',
       });
     },
@@ -439,10 +439,10 @@ export function useUpdateFunctionalRequirement() {
         description: 'Functional requirement updated successfully!',
       });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to update functional requirement',
+        description: (error instanceof Error ? error.message : String(error)) || 'Failed to update functional requirement',
         variant: 'destructive',
       });
     },
@@ -481,10 +481,10 @@ export function useDeleteFunctionalRequirement() {
         description: 'Functional requirement deleted successfully!',
       });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to delete functional requirement',
+        description: (error instanceof Error ? error.message : String(error)) || 'Failed to delete functional requirement',
         variant: 'destructive',
       });
     },
@@ -620,10 +620,10 @@ export function useCloneFunctionalRequirement() {
         description: `${result.hierarchyId} created in target project`,
       });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to clone functional requirement',
+        description: (error instanceof Error ? error.message : String(error)) || 'Failed to clone functional requirement',
         variant: 'destructive',
       });
     },

@@ -1,17 +1,18 @@
 import { Client, Databases } from 'node-appwrite';
 
 const client = new Client()
-    .setEndpoint(process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT!)
-    .setProject(process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID!);
+  .setEndpoint(process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT!)
+  .setProject(process.env.NEXT_PUBLIC_APPWRITE_PROJECT_ID!);
 
 // For server-side operations, set the API key
 if (process.env.APPWRITE_API_KEY) {
-    client.setKey(process.env.APPWRITE_API_KEY);
+  client.setKey(process.env.APPWRITE_API_KEY);
 }
 
 export const databases = new Databases(client);
 import { ID } from 'node-appwrite';
 import type { GeneratedHierarchy } from '@/lib/ai-generator';
+import { logger } from '@/lib/logger';
 
 const DATABASE_ID = process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!;
 const CLIENT_REQUIREMENTS_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_CLIENT_REQUIREMENTS_COLLECTION_ID!;
@@ -42,7 +43,7 @@ export async function bulkSaveGeneratedHierarchy(
 
   try {
     // Step 1: Save Client Requirements
-    console.log('Saving client requirements...');
+    logger.debug('Saving client requirements');
     for (let i = 0; i < generated.clientRequirements.length; i++) {
       const cr = generated.clientRequirements[i];
       const crDoc = await databases.createDocument(
@@ -68,15 +69,15 @@ export async function bulkSaveGeneratedHierarchy(
     }
 
     // Step 2: Save Functional Requirements (with hierarchy)
-    console.log('Saving functional requirements...');
+    logger.debug('Saving functional requirements');
     const frIdMap = new Map<string, string>(); // Map parentId to actual DB ID
-    
+
     // First pass: Create top-level requirements
     const topLevelFRs = generated.functionalRequirements.filter(fr => !fr.parentId);
     for (let i = 0; i < topLevelFRs.length; i++) {
       const fr = topLevelFRs[i];
       const hierarchyId = `REQ-${String(i + 1).padStart(2, '0')}`;
-      
+
       const frDoc = await databases.createDocument(
         DATABASE_ID,
         FUNCTIONAL_REQUIREMENTS_COLLECTION_ID,
@@ -103,7 +104,7 @@ export async function bulkSaveGeneratedHierarchy(
           createdBy: userId,
         }
       );
-      
+
       frIdMap.set(`fr-${i}`, frDoc.$id);
       result.functionalRequirements.push({
         id: frDoc.$id,
@@ -164,11 +165,11 @@ export async function bulkSaveGeneratedHierarchy(
     }
 
     // Step 3: Save Epics
-    console.log('Saving epics...');
+    logger.debug('Saving epics');
     for (let i = 0; i < generated.epics.length; i++) {
       const epic = generated.epics[i];
       const epicHierarchyId = `${projectCode}-EPIC-${String(i + 1).padStart(2, '0')}`;
-      
+
       // Link to first matching functional requirement if available
       const linkedFRId = epic.functionalRequirementIds && epic.functionalRequirementIds.length > 0
         ? result.functionalRequirements[0]?.id || ''
@@ -201,11 +202,11 @@ export async function bulkSaveGeneratedHierarchy(
     }
 
     // Step 4: Save Tasks
-    console.log('Saving tasks...');
+    logger.debug('Saving tasks');
     for (let i = 0; i < generated.tasks.length; i++) {
       const task = generated.tasks[i];
       const taskHierarchyId = `${projectCode}-${String(i + 1).padStart(3, '0')}`;
-      
+
       // Link to epic if specified
       const epicDbId = task.epicId ? result.epics[parseInt(task.epicId)]?.id || '' : '';
 
@@ -243,10 +244,11 @@ export async function bulkSaveGeneratedHierarchy(
       });
     }
 
-    console.log('Bulk save complete:', result);
+    logger.info('Bulk save complete', result);
     return result;
-  } catch (error: any) {
-    console.error('Bulk save error:', error);
-    throw new Error(`Failed to save generated data: ${error.message}`);
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? (error instanceof Error ? error.message : String(error)) : 'Unknown error';
+    logger.error('Bulk save error', { error: errorMessage });
+    throw new Error(`Failed to save generated data: ${errorMessage}`);
   }
 }

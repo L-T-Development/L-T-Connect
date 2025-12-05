@@ -283,7 +283,7 @@ export function NotificationCenter() {
                 <Bell className="h-12 w-12 text-muted-foreground mb-3" />
                 <p className="text-sm font-medium">No notifications</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  You're all caught up!
+                  You&apos;re all caught up!
                 </p>
               </div>
             )}

@@ -1,8 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useAuth } from "@/components/providers/auth-provider";
-import { useWorkspaces } from "@/hooks/use-workspace";
+import { useCurrentWorkspace } from '@/hooks/use-current-workspace';
 import { useProjects } from "@/hooks/use-project";
 import { useWorkspaceTasks } from "@/hooks/use-task";
 import { useWorkspaceSprints } from "@/hooks/use-sprint";
@@ -14,14 +13,12 @@ import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Target, GitBranch,
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths, isSameMonth, startOfWeek, endOfWeek } from "date-fns";
 
 export default function CalendarPage() {
-  const { user } = useAuth();
-  const { data: workspaces, isLoading: workspacesLoading } = useWorkspaces(user?.$id);
-  const currentWorkspace = workspaces?.[0];
-  
+  const { currentWorkspace, isLoading: workspacesLoading } = useCurrentWorkspace();
+
   const { data: projects = [] } = useProjects(currentWorkspace?.$id);
   const { data: allTasks = [] } = useWorkspaceTasks(currentWorkspace?.$id);
   const { data: sprints = [] } = useWorkspaceSprints(currentWorkspace?.$id);
-  
+
   const [selectedMonth, setSelectedMonth] = React.useState(new Date());
   const [selectedProject, setSelectedProject] = React.useState<string>("ALL");
   const [selectedDay, setSelectedDay] = React.useState<Date | null>(null);
@@ -40,18 +37,18 @@ export default function CalendarPage() {
   // Get tasks and sprints for a specific day
   const getEventsForDay = (day: Date) => {
     const dateStr = format(day, 'yyyy-MM-dd');
-    
+
     const tasksForDay = filteredTasks.filter(task => {
       if (!task.dueDate) return false;
       return format(new Date(task.dueDate), 'yyyy-MM-dd') === dateStr;
     });
-    
+
     const sprintsForDay = filteredSprints.filter(sprint => {
       const startDate = format(new Date(sprint.startDate), 'yyyy-MM-dd');
       const endDate = format(new Date(sprint.endDate), 'yyyy-MM-dd');
       return dateStr >= startDate && dateStr <= endDate;
     });
-    
+
     return { tasks: tasksForDay, sprints: sprintsForDay };
   };
 
@@ -61,7 +58,7 @@ export default function CalendarPage() {
     const monthEnd = endOfMonth(selectedMonth);
     const calendarStart = startOfWeek(monthStart);
     const calendarEnd = endOfWeek(monthEnd);
-    
+
     return eachDayOfInterval({ start: calendarStart, end: calendarEnd });
   }, [selectedMonth]);
 
@@ -72,23 +69,23 @@ export default function CalendarPage() {
   const stats = React.useMemo(() => {
     const monthStart = startOfMonth(selectedMonth);
     const monthEnd = endOfMonth(selectedMonth);
-    
+
     const upcomingTasks = filteredTasks.filter(task => {
       if (!task.dueDate) return false;
       const dueDate = new Date(task.dueDate);
       return dueDate >= monthStart && dueDate <= monthEnd && task.status !== 'DONE';
     }).length;
-    
+
     const activeSprints = filteredSprints.filter(sprint => {
       const now = new Date();
       return new Date(sprint.startDate) <= now && new Date(sprint.endDate) >= now && sprint.status === 'ACTIVE';
     }).length;
-    
+
     const overdueTasks = filteredTasks.filter(task => {
       if (!task.dueDate) return false;
       return new Date(task.dueDate) < new Date() && task.status !== 'DONE';
     }).length;
-    
+
     return { upcomingTasks, activeSprints, overdueTasks };
   }, [filteredTasks, filteredSprints, selectedMonth]);
 
@@ -234,7 +231,7 @@ export default function CalendarPage() {
                   const isCurrentMonth = isSameMonth(day, selectedMonth);
                   const isSelected = selectedDay ? isSameDay(day, selectedDay) : false;
                   const hasEvents = events.tasks.length > 0 || events.sprints.length > 0;
-                  
+
                   return (
                     <button
                       key={idx}
@@ -285,7 +282,7 @@ export default function CalendarPage() {
                 {selectedDay ? format(selectedDay, 'MMMM d, yyyy') : 'Select a day'}
               </CardTitle>
               <CardDescription>
-                {selectedDayEvents 
+                {selectedDayEvents
                   ? `${selectedDayEvents.tasks.length} tasks, ${selectedDayEvents.sprints.length} sprints`
                   : 'View events for a selected day'
                 }
@@ -328,7 +325,7 @@ export default function CalendarPage() {
                       })}
                     </div>
                   )}
-                  
+
                   {selectedDayEvents.tasks.length > 0 && (
                     <div className="space-y-2">
                       <h3 className="text-sm font-medium flex items-center gap-2">
@@ -338,7 +335,7 @@ export default function CalendarPage() {
                       {selectedDayEvents.tasks.map((task) => {
                         const project = projects.find(p => p.$id === task.projectId);
                         const isOverdue = new Date(task.dueDate!) < new Date() && task.status !== 'DONE';
-                        
+
                         return (
                           <div key={task.$id} className={`p-3 rounded-lg border ${isOverdue ? 'bg-red-50 dark:bg-red-950' : 'bg-green-50 dark:bg-green-950'}`}>
                             <div className="font-medium">{task.title}</div>
@@ -348,8 +345,8 @@ export default function CalendarPage() {
                             <div className="flex items-center gap-2 mt-2">
                               <Badge variant={
                                 task.priority === 'CRITICAL' ? 'destructive' :
-                                task.priority === 'HIGH' ? 'default' :
-                                'secondary'
+                                  task.priority === 'HIGH' ? 'default' :
+                                    'secondary'
                               }>
                                 {task.priority}
                               </Badge>

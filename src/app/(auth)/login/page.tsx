@@ -22,7 +22,7 @@ export default function LoginPage() {
       await login(email, password);
       toast.success('Welcome back!');
     } catch (error: any) {
-      toast.error(error.message || 'Login failed. Please check your credentials.');
+      toast.error((error instanceof Error ? error.message : String(error)) || 'Login failed. Please check your credentials.');
     } finally {
       setLoading(false);
     }

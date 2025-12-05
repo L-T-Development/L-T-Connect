@@ -16,8 +16,8 @@ import { TaskDetailsDialog } from '@/components/task/task-details-dialog';
 import { EditTaskDialog } from '@/components/task/edit-task-dialog';
 import { useTasks, useCreateTask, useUpdateTask, useUpdateTaskStatus, useDeleteTask } from '@/hooks/use-task';
 import { useProjects } from '@/hooks/use-project';
-import { useWorkspaces } from '@/hooks/use-workspace';
 import { useAuth } from '@/components/providers/auth-provider';
+import { useCurrentWorkspace } from '@/hooks/use-current-workspace';
 import { useEpics } from '@/hooks/use-epic';
 import { useFunctionalRequirements } from '@/hooks/use-functional-requirement';
 import { Plus, Filter, Search } from 'lucide-react';
@@ -30,8 +30,7 @@ export default function TasksPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user } = useAuth();
-  const { data: workspaces } = useWorkspaces(user?.$id);
-  const currentWorkspace = workspaces?.[0]; // For now, use first workspace
+  const { currentWorkspace } = useCurrentWorkspace();
   const projectIdFromUrl = searchParams.get('projectId');
 
   const [selectedProjectId, setSelectedProjectId] = React.useState<string>(projectIdFromUrl || '');
@@ -54,14 +53,14 @@ export default function TasksPage() {
   // Restore project selection from localStorage or set from URL/first project
   React.useEffect(() => {
     const STORAGE_KEY = 'selected-project-id';
-    
+
     // Priority: URL param > localStorage > first project
     if (projectIdFromUrl) {
       setSelectedProjectId(projectIdFromUrl);
       localStorage.setItem(STORAGE_KEY, projectIdFromUrl);
     } else {
       const savedProjectId = localStorage.getItem(STORAGE_KEY);
-      
+
       if (savedProjectId && projects?.some(p => p.$id === savedProjectId)) {
         // Restore saved project if it still exists
         setSelectedProjectId(savedProjectId);
@@ -130,10 +129,14 @@ export default function TasksPage() {
       status: values.status,
       priority: values.priority,
       createdBy: user.$id,
+      createdByName: user.name, // ✅ Add creator name
+      assignedBy: user.$id, // ✅ Who is assigning the task
+      assignedByName: user.name, // ✅ Assigner's name
       dueDate: values.dueDate?.toISOString(),
       epicId: values.epicId && values.epicId !== 'none' ? values.epicId : undefined,
       functionalRequirementId: values.functionalRequirementId && values.functionalRequirementId !== 'none' ? values.functionalRequirementId : undefined,
       labels: values.labels || [],
+      assigneeIds: values.assignedTo || [], // Map assignedTo from form to assigneeIds for mutation
     });
 
     setIsCreateDialogOpen(false);
@@ -265,8 +268,8 @@ export default function TasksPage() {
         </div>
 
         <div className="flex gap-2 w-full sm:w-auto">
-          <Button 
-            onClick={() => setIsCreateDialogOpen(true)} 
+          <Button
+            onClick={() => setIsCreateDialogOpen(true)}
             disabled={!selectedProjectId}
             className="flex-1 sm:flex-none"
           >
@@ -319,6 +322,7 @@ export default function TasksPage() {
         existingLabels={existingLabels}
         epics={epics}
         functionalRequirements={functionalRequirements}
+        workspaceId={currentWorkspace.$id}
       />
 
       {/* Task Details Dialog */}
