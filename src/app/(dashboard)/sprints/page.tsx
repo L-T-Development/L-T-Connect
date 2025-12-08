@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { useAuth } from '@/components/providers/auth-provider';
-import { useWorkspaces } from '@/hooks/use-workspace';
+import { useCurrentWorkspace } from '@/hooks/use-current-workspace';
 import { useProjects } from '@/hooks/use-project';
 import { useSprints, useCreateSprint, useStartSprint, useCompleteSprint, useUpdateSprint, useDeleteSprint } from '@/hooks/use-sprint';
 import { useTasks } from '@/hooks/use-task';
@@ -25,8 +25,7 @@ import { useRouter } from 'next/navigation';
 export default function SprintsPage() {
   const router = useRouter();
   const { user } = useAuth();
-  const { data: workspaces, isLoading: workspacesLoading } = useWorkspaces(user?.$id);
-  const currentWorkspace = workspaces?.[0];
+  const { currentWorkspace, isLoading: workspacesLoading } = useCurrentWorkspace();
 
   const [selectedProjectId, setSelectedProjectId] = React.useState<string>('');
   const [createDialogOpen, setCreateDialogOpen] = React.useState(false);
@@ -35,7 +34,7 @@ export default function SprintsPage() {
   const { data: projects, isLoading: projectsLoading } = useProjects(currentWorkspace?.$id);
   const { data: sprints, isLoading: sprintsLoading } = useSprints(selectedProjectId);
   const { data: tasks } = useTasks(selectedProjectId);
-  
+
   const createSprint = useCreateSprint();
   const updateSprint = useUpdateSprint();
   const deleteSprint = useDeleteSprint();
@@ -46,7 +45,7 @@ export default function SprintsPage() {
   React.useEffect(() => {
     const STORAGE_KEY = 'selected-project-id';
     const savedProjectId = localStorage.getItem(STORAGE_KEY);
-    
+
     if (savedProjectId && projects?.some(p => p.$id === savedProjectId)) {
       // Restore saved project if it still exists
       setSelectedProjectId(savedProjectId);
@@ -68,7 +67,7 @@ export default function SprintsPage() {
     const sprintTasks = tasks?.filter((t) => t.sprintId === sprintId) || [];
     const totalTasks = sprintTasks.length;
     const completedTasks = sprintTasks.filter((t) => t.status === 'DONE').length;
-    
+
     const progress = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
 
     return {
@@ -115,7 +114,7 @@ export default function SprintsPage() {
         endDate: data.endDate,
       },
     });
-    
+
     setEditingSprint(null);
   };
 
@@ -249,10 +248,10 @@ export default function SprintsPage() {
           {sprints.map((sprint) => {
             const stats = getSprintStats(sprint.$id);
             const StatusIcon = getStatusIcon(sprint.status);
-            
+
             return (
-              <Card 
-                key={sprint.$id} 
+              <Card
+                key={sprint.$id}
                 className="hover:shadow-lg transition-shadow cursor-pointer"
                 onClick={() => router.push(`/sprints/${sprint.$id}/board`)}
               >

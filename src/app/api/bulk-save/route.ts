@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { serverDatabases } from '@/lib/appwrite-server';
 import { ID } from 'node-appwrite';
+import { logger } from '@/lib/logger';
 
 const DATABASE_ID = process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!;
 const CLIENT_REQUIREMENTS_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_CLIENT_REQUIREMENTS_COLLECTION_ID!;
@@ -13,7 +14,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { generated, projectId, projectCode, workspaceId, userId } = body;
 
-    console.log('Starting bulk save...', {
+    logger.debug('Starting bulk save', {
       projectId,
       projectCode,
       workspaceId,
@@ -34,10 +35,10 @@ export async function POST(request: NextRequest) {
     };
 
     // Step 1: Save Client Requirements
-    console.log('Step 1: Saving client requirements...');
+    logger.debug('Step 1: Saving client requirements');
     for (let i = 0; i < generated.clientRequirements.length; i++) {
       const cr = generated.clientRequirements[i];
-      console.log(`Creating client requirement ${i + 1}:`, cr.title);
+      logger.debug(`Creating client requirement ${i + 1}`, { title: cr.title });
 
       const crDoc = await serverDatabases.createDocument(
         DATABASE_ID,
@@ -59,21 +60,21 @@ export async function POST(request: NextRequest) {
         id: crDoc.$id,
         hierarchyId: `CR-${String(i + 1).padStart(2, '0')}`,
       });
-      console.log(`Created CR: ${crDoc.$id}`);
+      logger.debug(`Created CR: ${crDoc.$id}`);
     }
 
     // Step 2: Save Functional Requirements (with hierarchy)
-    console.log('Step 2: Saving functional requirements...');
+    logger.debug('Step 2: Saving functional requirements');
     const frIdMap = new Map<string, string>();
 
     // First pass: Create top-level requirements
     const topLevelFRs = generated.functionalRequirements.filter((fr: any) => !fr.parentId);
-    console.log(`Creating ${topLevelFRs.length} top-level FRs`);
+    logger.debug(`Creating ${topLevelFRs.length} top-level FRs`);
 
     for (let i = 0; i < topLevelFRs.length; i++) {
       const fr = topLevelFRs[i];
       const hierarchyId = `REQ-${String(i + 1).padStart(2, '0')}`;
-      console.log(`Creating FR ${hierarchyId}:`, fr.title);
+      logger.debug(`Creating FR ${hierarchyId}`, { title: fr.title });
 
       const frDoc = await serverDatabases.createDocument(
         DATABASE_ID,
@@ -108,17 +109,17 @@ export async function POST(request: NextRequest) {
         id: frDoc.$id,
         hierarchyId,
       });
-      console.log(`Created FR: ${frDoc.$id} (${hierarchyId})`);
+      logger.debug(`Created FR: ${frDoc.$id} (${hierarchyId})`);
     }
 
     // Second pass: Create child requirements
     const childFRs = generated.functionalRequirements.filter((fr: any) => fr.parentId);
-    console.log(`Creating ${childFRs.length} child FRs`);
+    logger.debug(`Creating ${childFRs.length} child FRs`);
 
     for (const fr of childFRs) {
       const parentDbId = frIdMap.get(fr.parentId || '');
       if (!parentDbId) {
-        console.log(`Skipping child FR (parent not found): ${fr.title}`);
+        logger.warn(`Skipping child FR (parent not found)`, { title: fr.title });
         continue;
       }
 
@@ -134,7 +135,7 @@ export async function POST(request: NextRequest) {
       ).length;
       const childHierarchyId = `${parentHierarchyId}.${String(siblingCount + 1).padStart(2, '0')}`;
 
-      console.log(`Creating child FR ${childHierarchyId}:`, fr.title);
+      logger.debug(`Creating child FR ${childHierarchyId}`, { title: fr.title });
 
       const frDoc = await serverDatabases.createDocument(
         DATABASE_ID,
@@ -167,15 +168,15 @@ export async function POST(request: NextRequest) {
         id: frDoc.$id,
         hierarchyId: childHierarchyId,
       });
-      console.log(`Created child FR: ${frDoc.$id} (${childHierarchyId})`);
+      logger.debug(`Created child FR: ${frDoc.$id} (${childHierarchyId})`);
     }
 
     // Step 3: Save Epics
-    console.log('Step 3: Saving epics...');
+    logger.debug('Step 3: Saving epics');
     for (let i = 0; i < generated.epics.length; i++) {
       const epic = generated.epics[i];
       const epicHierarchyId = `${projectCode}-EPIC-${String(i + 1).padStart(2, '0')}`;
-      console.log(`Creating epic ${epicHierarchyId}:`, epic.name);
+      logger.debug(`Creating epic ${epicHierarchyId}`, { name: epic.name });
 
       const linkedFRId =
         epic.functionalRequirementIds && epic.functionalRequirementIds.length > 0
@@ -206,15 +207,15 @@ export async function POST(request: NextRequest) {
         id: epicDoc.$id,
         hierarchyId: epicHierarchyId,
       });
-      console.log(`Created epic: ${epicDoc.$id} (${epicHierarchyId})`);
+      logger.debug(`Created epic: ${epicDoc.$id} (${epicHierarchyId})`);
     }
 
     // Step 4: Save Tasks
-    console.log('Step 4: Saving tasks...');
+    logger.debug('Step 4: Saving tasks');
     for (let i = 0; i < generated.tasks.length; i++) {
       const task = generated.tasks[i];
       const taskHierarchyId = `${projectCode}-${String(i + 1).padStart(3, '0')}`;
-      console.log(`Creating task ${taskHierarchyId}:`, task.title);
+      logger.debug(`Creating task ${taskHierarchyId}`, { title: task.title });
 
       // Parse epicId as index if it's a string number
       let epicDbId = '';
@@ -256,19 +257,21 @@ export async function POST(request: NextRequest) {
         id: taskDoc.$id,
         hierarchyId: taskHierarchyId,
       });
-      console.log(`Created task: ${taskDoc.$id} (${taskHierarchyId})`);
+      logger.debug(`Created task: ${taskDoc.$id} (${taskHierarchyId})`);
     }
 
-    console.log('Bulk save complete!', result);
+    logger.info('Bulk save complete', result);
 
     return NextResponse.json({
       success: true,
       result,
     });
-  } catch (error: any) {
-    console.error('Bulk save error:', error);
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? (error instanceof Error ? error.message : String(error)) : 'Unknown error';
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    logger.error('Bulk save error', { error: errorMessage, stack: errorStack });
     return NextResponse.json(
-      { error: 'Failed to save generated data: ' + error.message },
+      { error: 'Failed to save generated data: ' + errorMessage },
       { status: 500 }
     );
   }

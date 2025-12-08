@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { writeFile, unlink } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
-// @ts-ignore - pdf2json has incomplete types
 import PDFParser from 'pdf2json';
 
 export async function POST(request: NextRequest) {
@@ -22,7 +21,7 @@ export async function POST(request: NextRequest) {
     // Convert file to buffer and write to temp file
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
-    
+
     // Create temp file path
     tempFilePath = join(tmpdir(), `pdf-${Date.now()}-${Math.random().toString(36).substring(7)}.pdf`);
     await writeFile(tempFilePath, buffer);
@@ -44,7 +43,7 @@ export async function POST(request: NextRequest) {
 
     // Extract text from all pages
     let fullText = '';
-    
+
     if (parsedData && parsedData.Pages) {
       for (const page of parsedData.Pages) {
         if (page.Texts) {
@@ -66,7 +65,7 @@ export async function POST(request: NextRequest) {
 
     // Clean up temp file
     if (tempFilePath) {
-      await unlink(tempFilePath).catch(() => {});
+      await unlink(tempFilePath).catch(() => { });
     }
 
     const numPages = parsedData?.Pages?.length || 0;
@@ -79,7 +78,7 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     // Clean up temp file on error
     if (tempFilePath) {
-      await unlink(tempFilePath).catch(() => {});
+      await unlink(tempFilePath).catch(() => { });
     }
 
     console.error('PDF parsing error:', error);

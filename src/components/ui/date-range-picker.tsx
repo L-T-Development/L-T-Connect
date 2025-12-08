@@ -28,6 +28,7 @@ export function DatePickerWithRange({
   const [date, setDate] = React.useState<{ from: Date; to: Date } | undefined>(
     from && to ? { from, to } : undefined
   );
+  const [open, setOpen] = React.useState(false);
 
   React.useEffect(() => {
     if (from && to) {
@@ -40,11 +41,16 @@ export function DatePickerWithRange({
     if (onSelect) {
       onSelect(selected);
     }
+
+    // Auto-close when both dates are selected (complete range)
+    if (selected?.from && selected?.to) {
+      setOpen(false);
+    }
   };
 
   return (
     <div className={cn('grid gap-2', className)}>
-      <Popover>
+      <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
             id="date"

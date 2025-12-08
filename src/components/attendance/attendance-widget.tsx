@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/components/providers/auth-provider';
-import { useWorkspaces } from '@/hooks/use-workspace';
+import { useCurrentWorkspace } from '@/hooks/use-current-workspace';
 import { useTodayAttendance, useCheckIn, useCheckOut } from '@/hooks/use-attendance';
 import {
   getCurrentDate,
@@ -24,19 +24,18 @@ import { Loader2, Clock, CheckCircle, XCircle, AlertCircle, Calendar } from 'luc
 
 export function AttendanceWidget() {
   const { user } = useAuth();
-  
-  // Get user's workspaces - use first workspace as default or user.workspaceId if set
-  const { data: workspaces } = useWorkspaces(user?.$id);
-  const currentWorkspace = workspaces?.[0];
-  const workspaceId = user?.workspaceId || currentWorkspace?.$id || '';
-  
+  const { currentWorkspace } = useCurrentWorkspace();
+
+  // Use currentWorkspace as single source of truth for workspace ID
+  const workspaceId = currentWorkspace?.$id || '';
+
   const { data: todayAttendance, isLoading } = useTodayAttendance(
-    user?.$id || '', 
+    user?.$id || '',
     workspaceId
   );
   const checkInMutation = useCheckIn();
   const checkOutMutation = useCheckOut();
-  
+
   const [currentTime, setCurrentTime] = useState(getCurrentTime());
   const [currentDate] = useState(getCurrentDate());
   const [workDuration, setWorkDuration] = useState<string>('0h 0m');
@@ -45,7 +44,7 @@ export function AttendanceWidget() {
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(getCurrentTime());
-      
+
       // Update work duration if checked in
       if (todayAttendance && todayAttendance.checkInTime && !todayAttendance.checkOutTime) {
         const hours = calculateWorkHours(todayAttendance.checkInTime, new Date().toISOString());
@@ -77,7 +76,7 @@ export function AttendanceWidget() {
 
   const handleCheckIn = async () => {
     if (!user?.$id) return;
-    
+
     if (!workspaceId) {
       console.error('No workspace ID found. Please join or create a workspace first.');
       return;
@@ -159,13 +158,13 @@ export function AttendanceWidget() {
   // Get late arrival info
   const getLateInfo = () => {
     if (!todayAttendance?.checkInTime) return null;
-    
+
     const lateMinutes = calculateLateMinutes(todayAttendance.checkInTime);
     if (lateMinutes > 0) {
       return (
-        <div className="flex items-center gap-2 p-3 bg-orange-50 border border-orange-200 rounded-lg">
-          <AlertCircle className="h-4 w-4 text-orange-600" />
-          <p className="text-sm text-orange-800">
+        <div className="flex items-center gap-2 p-3 bg-orange-50 dark:bg-orange-950 border border-orange-200 dark:border-orange-800 rounded-lg">
+          <AlertCircle className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+          <p className="text-sm text-orange-800 dark:text-orange-200">
             Late by {lateMinutes} minutes
           </p>
         </div>
@@ -210,17 +209,20 @@ export function AttendanceWidget() {
       <CardContent className="space-y-4">
         {/* Working Day Info */}
         {isSaturday && (
-          <div className={`p-3 rounded-lg border ${saturdayIsWorking ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200'}`}>
+          <div className={`p-3 rounded-lg border ${saturdayIsWorking
+              ? 'bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800'
+              : 'bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700'
+            }`}>
             <p className="text-sm font-medium">
               {saturdayIsWorking ? (
                 <>
-                  <span className="text-blue-700">📅 Working Saturday</span>
-                  <span className="text-blue-600 ml-2">(Week {weekOfMonth})</span>
+                  <span className="text-blue-700 dark:text-blue-300">📅 Working Saturday</span>
+                  <span className="text-blue-600 dark:text-blue-400 ml-2">(Week {weekOfMonth})</span>
                 </>
               ) : (
                 <>
-                  <span className="text-gray-700">Weekend</span>
-                  <span className="text-gray-600 ml-2">(Week {weekOfMonth})</span>
+                  <span className="text-gray-700 dark:text-gray-300">Weekend</span>
+                  <span className="text-gray-600 dark:text-gray-400 ml-2">(Week {weekOfMonth})</span>
                 </>
               )}
             </p>
@@ -315,14 +317,14 @@ export function AttendanceWidget() {
           {todayIsWeekend && !saturdayIsWorking && (
             <div className="text-center p-4 bg-muted rounded-lg">
               <p className="text-sm text-muted-foreground">
-                Enjoy your weekend! 🎉
+                You haven&apos;t checked in today. Click the button above to check in.
               </p>
             </div>
           )}
 
           {hasCheckedOut && (
-            <div className="text-center p-4 bg-green-50 border border-green-200 rounded-lg">
-              <p className="text-sm font-medium text-green-800">
+            <div className="text-center p-4 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg">
+              <p className="text-sm font-medium text-green-800 dark:text-green-200">
                 You've completed your work for today! 🎉
               </p>
             </div>

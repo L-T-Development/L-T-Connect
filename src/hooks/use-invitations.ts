@@ -159,7 +159,7 @@ export function useCreateEmailInvitation() {
     },
     onError: (error: Error) => {
       toast.error('Failed to send invitation', {
-        description: error.message,
+        description: (error instanceof Error ? error.message : String(error)),
       });
     },
   });
@@ -192,7 +192,7 @@ export function useAcceptEmailInvitation() {
     },
     onError: (error: Error) => {
       toast.error('Failed to accept invitation', {
-        description: error.message,
+        description: (error instanceof Error ? error.message : String(error)),
       });
     },
   });
@@ -230,7 +230,7 @@ export function useRevokeEmailInvitation() {
     },
     onError: (error: Error) => {
       toast.error('Failed to revoke invitation', {
-        description: error.message,
+        description: (error instanceof Error ? error.message : String(error)),
       });
     },
   });
@@ -290,7 +290,7 @@ export function useResendEmailInvitation() {
     },
     onError: (error: Error) => {
       toast.error('Failed to resend invitation', {
-        description: error.message,
+        description: (error instanceof Error ? error.message : String(error)),
       });
     },
   });
@@ -433,7 +433,7 @@ export function useCreateInviteCode() {
     },
     onError: (error: Error) => {
       toast.error('Failed to create invite code', {
-        description: error.message,
+        description: (error instanceof Error ? error.message : String(error)),
       });
     },
   });
@@ -494,7 +494,7 @@ export function useUseInviteCode() {
     },
     onError: (error: Error) => {
       toast.error('Failed to use invite code', {
-        description: error.message,
+        description: (error instanceof Error ? error.message : String(error)),
       });
     },
   });
@@ -532,7 +532,7 @@ export function useRevokeInviteCode() {
     },
     onError: (error: Error) => {
       toast.error('Failed to revoke invite code', {
-        description: error.message,
+        description: (error instanceof Error ? error.message : String(error)),
       });
     },
   });
@@ -559,7 +559,7 @@ export function useDeleteInviteCode() {
     },
     onError: (error: Error) => {
       toast.error('Failed to delete invite code', {
-        description: error.message,
+        description: (error instanceof Error ? error.message : String(error)),
       });
     },
   });
@@ -597,7 +597,7 @@ export function useUpdateInviteCode() {
     },
     onError: (error: Error) => {
       toast.error('Failed to update invite code', {
-        description: error.message,
+        description: (error instanceof Error ? error.message : String(error)),
       });
     },
   });

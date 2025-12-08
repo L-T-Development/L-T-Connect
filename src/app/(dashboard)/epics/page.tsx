@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { useAuth } from '@/components/providers/auth-provider';
-import { useWorkspaces } from '@/hooks/use-workspace';
+import { useCurrentWorkspace } from '@/hooks/use-current-workspace';
 import { useProjects } from '@/hooks/use-project';
 import { useEpics } from '@/hooks/use-epic';
 import { useTasks } from '@/hooks/use-task';
@@ -32,8 +32,7 @@ const statusConfig: Record<Epic['status'], { label: string; color: string }> = {
 
 export default function EpicsPage() {
   const { user } = useAuth();
-  const { data: workspaces } = useWorkspaces(user?.$id);
-  const currentWorkspace = workspaces?.[0];
+  const { currentWorkspace } = useCurrentWorkspace();
   const { data: projects = [] } = useProjects(currentWorkspace?.$id);
 
   const [selectedProjectId, setSelectedProjectId] = React.useState<string>('');
@@ -44,7 +43,7 @@ export default function EpicsPage() {
   React.useEffect(() => {
     const STORAGE_KEY = 'selected-project-id';
     const savedProjectId = localStorage.getItem(STORAGE_KEY);
-    
+
     if (savedProjectId && projects.some(p => p.$id === savedProjectId)) {
       // Restore saved project if it still exists
       setSelectedProjectId(savedProjectId);
@@ -80,12 +79,12 @@ export default function EpicsPage() {
   const getEpicMetrics = (epic: Epic) => {
     // First, try to calculate progress from linked FRs
     const linkedFRs = functionalRequirements.filter(fr => fr.epicId === epic.$id);
-    
+
     let progress = 0;
-    
+
     if (linkedFRs.length > 0) {
       // Calculate based on FR completion
-      const completedFRs = linkedFRs.filter(fr => 
+      const completedFRs = linkedFRs.filter(fr =>
         fr.status === 'TESTED' || fr.status === 'DEPLOYED'
       ).length;
       progress = Math.round((completedFRs / linkedFRs.length) * 100);
@@ -95,11 +94,11 @@ export default function EpicsPage() {
       const completedTasks = epicTasks.filter(t => t.status === 'DONE').length;
       progress = epicTasks.length > 0 ? Math.round((completedTasks / epicTasks.length) * 100) : 0;
     }
-    
+
     // Calculate task metrics for display
     const epicTasks = tasks.filter(t => t.epicId === epic.$id);
     const completedTasks = epicTasks.filter(t => t.status === 'DONE').length;
-    
+
     return {
       totalTasks: epicTasks.length,
       completedTasks,

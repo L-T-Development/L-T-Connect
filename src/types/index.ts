@@ -44,8 +44,8 @@ export interface WorkspaceSettings {
   brandingEnabled: boolean;
 }
 
-// Project Methodology
-export type ProjectMethodology = 'SCRUM' | 'KANBAN';
+// Project Methodology - Only Scrum supported
+export type ProjectMethodology = 'SCRUM';
 
 export type ProjectStatus = 'PLANNING' | 'ACTIVE' | 'ON_HOLD' | 'COMPLETED' | 'ARCHIVED';
 
@@ -573,49 +573,49 @@ export interface RolePermissions {
   canEditProjects: boolean;
   canDeleteProjects: boolean;
   canArchiveProjects: boolean;
-  
+
   // Task permissions
   canCreateTasks: boolean;
   canEditAllTasks: boolean;
   canEditOwnTasks: boolean;
   canDeleteTasks: boolean;
   canAssignTasks: boolean;
-  
+
   // Sprint permissions
   canCreateSprints: boolean;
   canEditSprints: boolean;
   canDeleteSprints: boolean;
   canStartSprints: boolean;
   canCompleteSprints: boolean;
-  
+
   // Requirements permissions
   canCreateRequirements: boolean;
   canEditRequirements: boolean;
   canDeleteRequirements: boolean;
   canApproveRequirements: boolean;
-  
+
   // Team permissions
   canInviteMembers: boolean;
   canRemoveMembers: boolean;
   canEditMemberRoles: boolean;
   canViewAllMembers: boolean;
-  
+
   // Time tracking permissions
   canTrackTime: boolean;
   canEditOwnTime: boolean;
   canEditAllTime: boolean;
   canApproveTime: boolean;
-  
+
   // Leave permissions
   canRequestLeave: boolean;
   canApproveLeave: boolean;
   canViewAllLeave: boolean;
-  
+
   // Workspace permissions
   canEditWorkspaceSettings: boolean;
   canDeleteWorkspace: boolean;
   canManageBilling: boolean;
-  
+
   // Analytics permissions
   canViewAnalytics: boolean;
   canExportData: boolean;
@@ -706,4 +706,24 @@ export interface InvitationMetadata {
   activeCodes: number;
   expiredCodes: number;
 }
+
+// ============================================================================
+// Holidays
+// ============================================================================
+
+export type HolidayType = 'PUBLIC' | 'OPTIONAL' | 'RESTRICTED';
+
+export interface Holiday {
+  $id: string;
+  workspaceId: string;
+  name: string;
+  date: string; // YYYY-MM-DD format
+  type: HolidayType;
+  description?: string;
+  recurring: boolean; // If true, repeats annually
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 

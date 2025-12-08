@@ -24,7 +24,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/components/providers/auth-provider';
-import { useWorkspaces, useCreateWorkspace } from '@/hooks/use-workspace';
+import { useCreateWorkspace } from '@/hooks/use-workspace';
+import { useCurrentWorkspace } from '@/hooks/use-current-workspace';
 
 interface WorkspaceSwitcherProps {
   className?: string;
@@ -32,26 +33,17 @@ interface WorkspaceSwitcherProps {
 
 export function WorkspaceSwitcher({ className }: WorkspaceSwitcherProps) {
   const { user } = useAuth();
-  const { data: workspaces, isLoading } = useWorkspaces(user?.$id);
+  const { currentWorkspace, currentWorkspaceId, workspaces, isLoading, setCurrentWorkspaceId } = useCurrentWorkspace();
   const createWorkspace = useCreateWorkspace();
-  
-  const [selectedWorkspace, setSelectedWorkspace] = React.useState<string | null>(null);
+
   const [open, setOpen] = React.useState(false);
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [name, setName] = React.useState('');
   const [description, setDescription] = React.useState('');
 
-  React.useEffect(() => {
-    if (workspaces && workspaces.length > 0 && !selectedWorkspace) {
-      setSelectedWorkspace(workspaces[0].$id);
-    }
-  }, [workspaces, selectedWorkspace]);
-
-  const currentWorkspace = workspaces?.find((w) => w.$id === selectedWorkspace);
-
   const handleCreateWorkspace = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!user) return;
 
     await createWorkspace.mutateAsync({
@@ -67,7 +59,7 @@ export function WorkspaceSwitcher({ className }: WorkspaceSwitcherProps) {
 
   if (isLoading) {
     return (
-      <Button variant="outline" className={cn('w-[200px] justify-between', className)} disabled>
+      <Button variant="outline" className={cn('w-full justify-between', className)} disabled>
         Loading...
       </Button>
     );
@@ -82,7 +74,7 @@ export function WorkspaceSwitcher({ className }: WorkspaceSwitcherProps) {
             role="combobox"
             aria-expanded={open}
             aria-label="Select a workspace"
-            className={cn('w-[200px] justify-between', className)}
+            className={cn('w-full justify-between', className)}
           >
             {currentWorkspace ? currentWorkspace.name : 'Select workspace'}
             <ChevronsUpDown className="ml-auto h-4 w-4 shrink-0 opacity-50" />
@@ -95,7 +87,9 @@ export function WorkspaceSwitcher({ className }: WorkspaceSwitcherProps) {
             <DropdownMenuItem
               key={workspace.$id}
               onSelect={() => {
-                setSelectedWorkspace(workspace.$id);
+                if (workspace.$id !== currentWorkspaceId) {
+                  setCurrentWorkspaceId(workspace.$id);
+                }
                 setOpen(false);
               }}
               className="cursor-pointer"
@@ -103,7 +97,7 @@ export function WorkspaceSwitcher({ className }: WorkspaceSwitcherProps) {
               <Check
                 className={cn(
                   'mr-2 h-4 w-4',
-                  selectedWorkspace === workspace.$id ? 'opacity-100' : 'opacity-0'
+                  currentWorkspaceId === workspace.$id ? 'opacity-100' : 'opacity-0'
                 )}
               />
               {workspace.name}

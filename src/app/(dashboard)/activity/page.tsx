@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { useAuth } from '@/components/providers/auth-provider';
-import { useWorkspaces } from '@/hooks/use-workspace';
+import { useCurrentWorkspace } from '@/hooks/use-current-workspace';
 import { useProjects } from '@/hooks/use-project';
 import { ActivityFeed } from '@/components/activity/activity-feed';
 import {
@@ -16,13 +16,12 @@ import { Activity } from 'lucide-react';
 
 export default function ActivityPage() {
   const { user } = useAuth();
-  const { data: workspaces, isLoading: workspacesLoading } = useWorkspaces(user?.$id);
-  const currentWorkspace = workspaces?.[0];
-  
+  const { currentWorkspace, isLoading: workspacesLoading } = useCurrentWorkspace();
+
   const { data: projects, isLoading: projectsLoading } = useProjects(
     currentWorkspace?.$id || ''
   );
-  
+
   const [selectedProjectId, setSelectedProjectId] = React.useState<string>('');
 
   // Set first project as default
@@ -102,8 +101,8 @@ export default function ActivityPage() {
 
       {/* Activity Feed */}
       {selectedProjectId && (
-        <ActivityFeed 
-          projectId={selectedProjectId} 
+        <ActivityFeed
+          projectId={selectedProjectId}
           showFilters={true}
           className="max-w-5xl mx-auto"
         />

@@ -23,10 +23,10 @@ interface CFDChartProps {
 export function CFDChart({ tasks, columns, startDate, endDate }: CFDChartProps) {
   // Generate daily data
   const days = eachDayOfInterval({ start: startDate, end: endDate });
-  
+
   const chartData = days.map(day => {
     const dayEnd = startOfDay(new Date(day.getTime() + 24 * 60 * 60 * 1000));
-    
+
     // Count tasks in each status up to this day
     const dataPoint: any = {
       date: format(day, 'MMM d'),
@@ -38,14 +38,14 @@ export function CFDChart({ tasks, columns, startDate, endDate }: CFDChartProps) 
       const count = tasks.filter(task => {
         const createdDate = new Date(task.$createdAt);
         const updatedDate = new Date(task.$updatedAt);
-        
+
         // Task was created before or on this day
         if (createdDate > dayEnd) return false;
-        
+
         // Task is currently in this status or was moved through it
         return task.status === column.id && updatedDate <= dayEnd;
       }).length;
-      
+
       dataPoint[column.id] = count;
     });
 
@@ -71,7 +71,7 @@ export function CFDChart({ tasks, columns, startDate, endDate }: CFDChartProps) 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       const total = payload.reduce((sum: number, entry: any) => sum + (entry.value || 0), 0);
-      
+
       return (
         <div className="bg-white dark:bg-gray-800 p-4 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg">
           <p className="font-semibold text-sm text-gray-900 dark:text-gray-100 mb-2">
@@ -123,20 +123,20 @@ export function CFDChart({ tasks, columns, startDate, endDate }: CFDChartProps) 
       <ResponsiveContainer width="100%" height={400}>
         <AreaChart data={chartData}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-          <XAxis 
-            dataKey="date" 
+          <XAxis
+            dataKey="date"
             tick={{ fontSize: 12 }}
             angle={-45}
             textAnchor="end"
             height={80}
           />
-          <YAxis 
+          <YAxis
             label={{ value: 'Number of Tasks', angle: -90, position: 'insideLeft' }}
             tick={{ fontSize: 12 }}
           />
           <Tooltip content={<CustomTooltip />} />
           <Legend />
-          
+
           {/* Render areas in reverse order (bottom to top) */}
           {[...columns].reverse().map((column) => (
             <Area

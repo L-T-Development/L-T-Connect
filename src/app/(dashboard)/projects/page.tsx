@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { useAuth } from '@/components/providers/auth-provider';
 import { useProjects, useDeleteProject, useUpdateProject, useCloneProject } from '@/hooks/use-project';
-import { useWorkspaces } from '@/hooks/use-workspace';
+import { useCurrentWorkspace } from '@/hooks/use-current-workspace';
 import { useWorkspaceTasks } from '@/hooks/use-task';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -35,6 +35,8 @@ import { MoreVertical, Settings, Trash2, Calendar, Users, GitBranch, Kanban, Edi
 import { formatDate } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import type { ProjectStatus, Project } from '@/types';
+import { useHasPermission, useIsAdmin } from '@/hooks/use-permissions';
+import { Permission } from '@/lib/permissions';
 
 const statusConfig: Record<ProjectStatus, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning' | 'info' }> = {
   PLANNING: { label: 'Planning', variant: 'outline' },
@@ -47,14 +49,20 @@ const statusConfig: Record<ProjectStatus, { label: string; variant: 'default' | 
 export default function ProjectsPage() {
   const { user } = useAuth();
   const router = useRouter();
-  const { data: workspaces } = useWorkspaces(user?.$id);
-  const currentWorkspace = workspaces?.[0]; // For now, use first workspace
-  const { data: projects, isLoading } = useProjects(currentWorkspace?.$id);
+  const { currentWorkspace, isLoading: workspacesLoading } = useCurrentWorkspace();
+  const { data: projects, isLoading: projectsLoading } = useProjects(currentWorkspace?.$id);
   const { data: allTasks } = useWorkspaceTasks(currentWorkspace?.$id);
   const deleteProject = useDeleteProject();
   const updateProject = useUpdateProject();
   const cloneProject = useCloneProject();
-  
+
+  // Permission checks
+  const canEditProject = useHasPermission(Permission.EDIT_PROJECT);
+  const canDeleteProject = useHasPermission(Permission.DELETE_PROJECT);
+  const canManageSettings = useHasPermission(Permission.MANAGE_PROJECT_SETTINGS);
+  const canCreateProject = useHasPermission(Permission.CREATE_PROJECT);
+  const isAdmin = useIsAdmin();
+
   const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
   const [editDialogOpen, setEditDialogOpen] = React.useState(false);
   const [cloneDialogOpen, setCloneDialogOpen] = React.useState(false);
@@ -86,7 +94,7 @@ export default function ProjectsPage() {
 
   const handleDelete = async () => {
     if (!projectToDelete) return;
-    
+
     await deleteProject.mutateAsync(projectToDelete);
     setDeleteDialogOpen(false);
     setProjectToDelete(null);
@@ -109,10 +117,14 @@ export default function ProjectsPage() {
     setSelectedProject(null);
   };
 
-  if (isLoading) {
+  // Show loading state
+  if (workspacesLoading || projectsLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+      <div className="flex items-center justify-center h-[calc(100vh-4rem)]">
+        <div className="text-center space-y-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto" />
+          <p className="text-muted-foreground">Loading projects...</p>
+        </div>
       </div>
     );
   }
@@ -148,7 +160,7 @@ export default function ProjectsPage() {
             Manage your projects in {currentWorkspace.name}
           </p>
         </div>
-        <CreateProjectDialog workspaceId={currentWorkspace.$id} />
+        {canCreateProject && <CreateProjectDialog workspaceId={currentWorkspace.$id} />}
       </div>
 
       {filteredProjects && filteredProjects.length > 0 ? (
@@ -157,7 +169,7 @@ export default function ProjectsPage() {
             const status = statusConfig[project.status];
             const projectTasks = allTasks?.filter(t => t.projectId === project.$id) || [];
             const health = calculateProjectHealth(project, allTasks || []);
-            
+
             return (
               <Card key={project.$id} className="hover:shadow-lg transition-shadow">
                 <CardHeader>
@@ -185,44 +197,52 @@ export default function ProjectsPage() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                          onClick={() => {
-                            setSelectedProject(project);
-                            setEditDialogOpen(true);
-                          }}
-                          className="cursor-pointer"
-                        >
-                          <Edit className="mr-2 h-4 w-4" />
-                          Edit Project
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => router.push(`/projects/${project.$id}/settings`)}
-                          className="cursor-pointer"
-                        >
-                          <Settings className="mr-2 h-4 w-4" />
-                          Settings
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => {
-                            setSelectedProject(project);
-                            setCloneDialogOpen(true);
-                          }}
-                          className="cursor-pointer"
-                        >
-                          <Copy className="mr-2 h-4 w-4" />
-                          Clone Project
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          onClick={() => {
-                            setProjectToDelete({ projectId: project.$id, workspaceId: project.workspaceId });
-                            setDeleteDialogOpen(true);
-                          }}
-                          className="cursor-pointer text-destructive focus:text-destructive"
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          Delete
-                        </DropdownMenuItem>
+                        {canEditProject && (
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setSelectedProject(project);
+                              setEditDialogOpen(true);
+                            }}
+                            className="cursor-pointer"
+                          >
+                            <Edit className="mr-2 h-4 w-4" />
+                            Edit Project
+                          </DropdownMenuItem>
+                        )}
+                        {canManageSettings && (
+                          <DropdownMenuItem
+                            onClick={() => router.push(`/projects/${project.$id}/settings`)}
+                            className="cursor-pointer"
+                          >
+                            <Settings className="mr-2 h-4 w-4" />
+                            Settings
+                          </DropdownMenuItem>
+                        )}
+                        {isAdmin && (
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setSelectedProject(project);
+                              setCloneDialogOpen(true);
+                            }}
+                            className="cursor-pointer"
+                          >
+                            <Copy className="mr-2 h-4 w-4" />
+                            Clone Project
+                          </DropdownMenuItem>
+                        )}
+                        {(canEditProject || canDeleteProject) && <DropdownMenuSeparator />}
+                        {canDeleteProject && (
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setProjectToDelete({ projectId: project.$id, workspaceId: project.workspaceId });
+                              setDeleteDialogOpen(true);
+                            }}
+                            className="cursor-pointer text-destructive focus:text-destructive"
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete
+                          </DropdownMenuItem>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>

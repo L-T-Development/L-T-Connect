@@ -1,3 +1,11 @@
+import { validateEnv } from './env-validation';
+
+// Validate environment variables at module load
+if (typeof window === 'undefined') {
+  // Only validate on server-side to avoid errors in browser
+  validateEnv();
+}
+
 // Appwrite Collection IDs
 export const DATABASE_ID = process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!;
 export const STORAGE_ID = process.env.NEXT_PUBLIC_APPWRITE_STORAGE_ID!;

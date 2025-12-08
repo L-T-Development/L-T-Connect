@@ -28,6 +28,8 @@ import { UserPlus, Upload, Download, FileSpreadsheet, AlertCircle, CheckCircle2,
 import { toast } from "sonner";
 import { useCreateUser } from "@/hooks/use-admin";
 import { useAuth } from "@/components/providers/auth-provider";
+import { useHasPermission } from "@/hooks/use-permissions";
+import { Permission } from "@/lib/permissions";
 import { parseCSV, type ParsedUser } from "@/lib/csv-parser";
 
 interface AddMembersSectionProps {
@@ -54,14 +56,17 @@ export function AddMembersSection({
 }: AddMembersSectionProps) {
   const { user } = useAuth();
   const createUser = useCreateUser();
-  
+
+  // Permission check - only users with INVITE_MEMBER permission can access this
+  const canInviteMembers = useHasPermission(Permission.INVITE_MEMBER);
+
   // Form ref for resetting
   const formRef = React.useRef<HTMLFormElement>(null);
-  
+
   // Individual form state
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [selectedRoleId, setSelectedRoleId] = React.useState<string>("");
-  
+
   // CSV upload state
   const [csvFile, setCsvFile] = React.useState<File | null>(null);
   const [parsedUsers, setParsedUsers] = React.useState<ParsedUser[]>([]);
@@ -95,7 +100,7 @@ export function AddMembersSection({
     const formData = new FormData(e.currentTarget);
     const roleId = formData.get('role') as string;
     const roleName = ROLE_MAPPING[roleId] || roleId;
-    
+
     const userData = {
       name: formData.get('name') as string,
       email: formData.get('email') as string,
@@ -110,12 +115,12 @@ export function AddMembersSection({
     try {
       await createUser.mutateAsync(userData);
       toast.success('User added successfully! Welcome email sent.');
-      
+
       // Reset form
       formRef.current?.reset();
       setSelectedRoleId("");
     } catch (error: any) {
-      toast.error(error.message || 'Failed to add user');
+      toast.error((error instanceof Error ? error.message : String(error)) || 'Failed to add user');
       console.error(error);
     } finally {
       setIsSubmitting(false);
@@ -138,7 +143,7 @@ export function AddMembersSection({
       setParsedUsers(users);
       toast.success(`Parsed ${users.length} users from CSV`);
     } catch (error: any) {
-      toast.error(error.message || 'Failed to parse CSV');
+      toast.error((error instanceof Error ? error.message : String(error)) || 'Failed to parse CSV');
       setCsvFile(null);
       setParsedUsers([]);
     }
@@ -150,7 +155,7 @@ export function AddMembersSection({
 
     setIsProcessing(true);
     setProcessingProgress(0);
-    
+
     const results = {
       success: 0,
       failed: 0,
@@ -161,7 +166,7 @@ export function AddMembersSection({
       const parsedUser = parsedUsers[i];
       const roleId = parsedUser.role;
       const roleName = ROLE_MAPPING[roleId] || roleId;
-      
+
       try {
         await createUser.mutateAsync({
           name: parsedUser.name,
@@ -173,26 +178,26 @@ export function AddMembersSection({
           createdBy: currentUserId,
           createdByName: user?.name || 'Admin',
         });
-        
+
         results.success++;
       } catch (error: any) {
         results.failed++;
         results.errors.push({
           row: i + 2, // +2 because of header row and 0-indexing
           email: parsedUser.email,
-          error: error.message || 'Unknown error',
+          error: (error instanceof Error ? error.message : String(error)) || 'Unknown error',
         });
       }
-      
+
       setProcessingProgress(((i + 1) / parsedUsers.length) * 100);
-      
+
       // Small delay to prevent rate limiting
       await new Promise(resolve => setTimeout(resolve, 300));
     }
 
     setImportResults(results);
     setIsProcessing(false);
-    
+
     if (results.success > 0) {
       toast.success(`Successfully added ${results.success} users!`);
     }
@@ -223,6 +228,28 @@ export function AddMembersSection({
     setImportResults(null);
     setProcessingProgress(0);
   };
+
+  // Access control - show error if user doesn't have permission
+  if (!canInviteMembers) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Access Denied</CardTitle>
+          <CardDescription>
+            You don't have permission to add members to this workspace.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Alert>
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              Only workspace managers can add new members. Please contact your workspace administrator if you need to add members.
+            </AlertDescription>
+          </Alert>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Tabs defaultValue="individual" className="space-y-6">
@@ -280,9 +307,9 @@ export function AddMembersSection({
                   <Label htmlFor="role">
                     Role <span className="text-red-500">*</span>
                   </Label>
-                  <Select 
-                    name="role" 
-                    required 
+                  <Select
+                    name="role"
+                    required
                     disabled={isSubmitting}
                     value={selectedRoleId}
                     onValueChange={setSelectedRoleId}

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -37,18 +37,14 @@ export function StandupNotes({ sprintId, projectId, currentUser }: StandupNotesP
   const [notes, setNotes] = useState<StandupNote[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  
+
   const [yesterday, setYesterday] = useState('');
   const [today, setToday] = useState('');
   const [blockers, setBlockers] = useState('');
-  
+
   const [hasSubmittedToday, setHasSubmittedToday] = useState(false);
 
-  useEffect(() => {
-    loadNotes();
-  }, [sprintId]);
-
-  const loadNotes = async () => {
+  const loadNotes = useCallback(async () => {
     try {
       setIsLoading(true);
       const response = await databases.listDocuments(
@@ -59,7 +55,7 @@ export function StandupNotes({ sprintId, projectId, currentUser }: StandupNotesP
 
       const sortedNotes = response.documents
         .sort((a, b) => new Date(b.$createdAt).getTime() - new Date(a.$createdAt).getTime());
-      
+
       setNotes(sortedNotes as any);
 
       // Check if user has submitted today
@@ -79,7 +75,11 @@ export function StandupNotes({ sprintId, projectId, currentUser }: StandupNotesP
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [sprintId, currentUser.$id]);
+
+  useEffect(() => {
+    loadNotes();
+  }, [loadNotes]);
 
   const handleSubmit = async () => {
     if (!yesterday.trim() || !today.trim()) {
@@ -173,7 +173,7 @@ export function StandupNotes({ sprintId, projectId, currentUser }: StandupNotesP
       <div>
         <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Daily Standup Notes</h2>
         <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-          Share what you did yesterday, what you're doing today, and any blockers
+          Share what you did yesterday, what you&apos;re doing today, and any blockers
         </p>
       </div>
 

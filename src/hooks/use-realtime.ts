@@ -7,6 +7,7 @@ import {
 } from '@/lib/appwrite-realtime';
 import { DATABASE_ID, COLLECTIONS } from '@/lib/appwrite-config';
 import type { RealtimeResponseEvent } from 'appwrite';
+import { logger } from '@/lib/logger';
 
 /**
  * Hook to subscribe to real-time updates for a collection
@@ -23,14 +24,14 @@ export function useCollectionSubscription(
   useEffect(() => {
     if (!enabled || typeof window === 'undefined') return;
 
-    console.log(`[Realtime] Subscribing to collection: ${collectionId}`);
+    logger.debug(`Subscribing to collection: ${collectionId}`);
 
     subscriptionRef.current = subscribeToCollection(
       DATABASE_ID,
       collectionId,
-      (response: RealtimeResponseEvent<any>) => {
+      (response: RealtimeResponseEvent<Record<string, unknown>>) => {
         const eventType = getRealtimeEventType(response.events);
-        console.log(`[Realtime] Event received:`, {
+        logger.debug('Realtime event received', {
           collection: collectionId,
           type: eventType,
           documentId: response.payload.$id,
@@ -44,7 +45,7 @@ export function useCollectionSubscription(
     );
 
     return () => {
-      console.log(`[Realtime] Unsubscribing from collection: ${collectionId}`);
+      logger.debug(`Unsubscribing from collection: ${collectionId}`);
       subscriptionRef.current?.unsubscribe();
     };
   }, [collectionId, enabled, queryClient, queryKeys]);
@@ -82,17 +83,17 @@ export function useNotificationsRealtime(userId?: string) {
   useEffect(() => {
     if (!userId || typeof window === 'undefined') return;
 
-    console.log(`[Realtime] Subscribing to notifications for user: ${userId}`);
+    logger.debug(`Subscribing to notifications for user: ${userId}`);
 
     subscriptionRef.current = subscribeToCollection(
       DATABASE_ID,
       COLLECTIONS.NOTIFICATIONS,
-      (response: RealtimeResponseEvent<any>) => {
+      (response: RealtimeResponseEvent<Record<string, unknown>>) => {
         // Only process if notification is for this user
         if (response.payload.userId !== userId) return;
 
         const eventType = getRealtimeEventType(response.events);
-        console.log(`[Realtime] Notification event:`, {
+        logger.debug('Notification event', {
           type: eventType,
           notificationId: response.payload.$id,
         });
@@ -109,7 +110,7 @@ export function useNotificationsRealtime(userId?: string) {
     );
 
     return () => {
-      console.log(`[Realtime] Unsubscribing from notifications`);
+      logger.debug('Unsubscribing from notifications');
       subscriptionRef.current?.unsubscribe();
     };
   }, [userId, queryClient]);

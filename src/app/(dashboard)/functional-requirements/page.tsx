@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { useAuth } from '@/components/providers/auth-provider';
-import { useWorkspaces } from '@/hooks/use-workspace';
+import { useCurrentWorkspace } from '@/hooks/use-current-workspace';
 import { useProjects } from '@/hooks/use-project';
 import { useFunctionalRequirements } from '@/hooks/use-functional-requirement';
 import { useClientRequirements } from '@/hooks/use-client-requirement';
@@ -50,8 +50,7 @@ const complexityConfig: Record<FunctionalRequirement['complexity'], { label: str
 
 export default function FunctionalRequirementsPage() {
   const { user } = useAuth();
-  const { data: workspaces } = useWorkspaces(user?.$id);
-  const currentWorkspace = workspaces?.[0];
+  const { currentWorkspace } = useCurrentWorkspace();
   const { data: projects = [] } = useProjects(currentWorkspace?.$id);
 
   const [selectedProjectId, setSelectedProjectId] = React.useState<string>('');
@@ -64,7 +63,7 @@ export default function FunctionalRequirementsPage() {
   React.useEffect(() => {
     const STORAGE_KEY = 'selected-project-id';
     const savedProjectId = localStorage.getItem(STORAGE_KEY);
-    
+
     if (savedProjectId && projects.some(p => p.$id === savedProjectId)) {
       // Restore saved project if it still exists
       setSelectedProjectId(savedProjectId);

@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/providers/auth-provider';
-import { useWorkspaces } from '@/hooks/use-workspace';
+import { useCurrentWorkspace } from '@/hooks/use-current-workspace';
 import { useProjects } from '@/hooks/use-project';
 import { useWorkspaceTasks } from '@/hooks/use-task';
 import { AttendanceWidget } from '@/components/attendance/attendance-widget';
@@ -28,8 +28,7 @@ import type { Task } from '@/types';
 export default function DashboardPage() {
   const { user } = useAuth();
   const router = useRouter();
-  const { data: workspaces, isLoading: workspacesLoading } = useWorkspaces(user?.$id);
-  const currentWorkspace = workspaces?.[0];
+  const { currentWorkspace, isLoading: workspacesLoading } = useCurrentWorkspace();
   const { data: projects = [], isLoading: projectsLoading } = useProjects(currentWorkspace?.$id);
 
   // Get all tasks in the workspace (single query, no hook violations)
@@ -40,11 +39,11 @@ export default function DashboardPage() {
     const activeProjects = projects.filter(p => p.status === 'ACTIVE' || p.status === 'PLANNING').length;
     const completedTasks = allTasks.filter(t => t.status === 'DONE').length;
     const myTasks = allTasks.filter(t => t.assigneeIds?.includes(user?.$id || '')).length;
-    
+
     // Count unique team members across all projects
     const allMembers = new Set<string>();
     projects.forEach(p => p.memberIds?.forEach(id => allMembers.add(id)));
-    
+
     return {
       activeProjects,
       completedTasks,
@@ -74,11 +73,11 @@ export default function DashboardPage() {
       .filter(t => t.dueDate && t.status !== 'DONE')
       .sort((a, b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime())
       .slice(0, 5);
-    
+
     return tasksWithDueDates.map(task => {
       const project = projects.find(p => p.$id === task.projectId);
       const daysUntil = Math.ceil((new Date(task.dueDate!).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-      
+
       return {
         title: task.title,
         projectName: project?.name || 'Unknown',
@@ -197,7 +196,7 @@ export default function DashboardPage() {
           <div className="grid gap-4 md:grid-cols-2">
             {/* Attendance Widget */}
             <AttendanceWidget />
-            
+
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -215,7 +214,7 @@ export default function DashboardPage() {
                         <p className="font-medium">{deadline.title}</p>
                         <p className="text-sm text-muted-foreground">{deadline.projectName}</p>
                       </div>
-                      <Badge 
+                      <Badge
                         variant={deadline.daysUntil <= 2 ? 'destructive' : deadline.daysUntil <= 7 ? 'default' : 'secondary'}
                       >
                         {deadline.daysUntil <= 0 ? 'Today' : `${deadline.daysUntil} days`}
@@ -234,8 +233,8 @@ export default function DashboardPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
-                <Button 
-                  className="w-full justify-start" 
+                <Button
+                  className="w-full justify-start"
                   variant="outline"
                   onClick={() => router.push('/projects')}
                 >
@@ -243,8 +242,8 @@ export default function DashboardPage() {
                   View Projects
                   <ArrowRight className="ml-auto h-4 w-4" />
                 </Button>
-                <Button 
-                  className="w-full justify-start" 
+                <Button
+                  className="w-full justify-start"
                   variant="outline"
                   onClick={() => router.push('/tasks')}
                 >
@@ -252,8 +251,8 @@ export default function DashboardPage() {
                   View All Tasks
                   <ArrowRight className="ml-auto h-4 w-4" />
                 </Button>
-                <Button 
-                  className="w-full justify-start" 
+                <Button
+                  className="w-full justify-start"
                   variant="outline"
                   onClick={() => router.push('/sprints')}
                 >
@@ -261,8 +260,8 @@ export default function DashboardPage() {
                   View Sprints
                   <ArrowRight className="ml-auto h-4 w-4" />
                 </Button>
-                <Button 
-                  className="w-full justify-start" 
+                <Button
+                  className="w-full justify-start"
                   variant="outline"
                   onClick={() => router.push('/attendance')}
                 >
@@ -288,10 +287,10 @@ export default function DashboardPage() {
                 myTasks.map((task) => {
                   const project = projects.find(p => p.$id === task.projectId);
                   const status = getStatusBadge(task.status);
-                  
+
                   return (
-                    <div 
-                      key={task.$id} 
+                    <div
+                      key={task.$id}
                       className="flex items-center justify-between rounded-lg border p-4 transition-colors hover:bg-accent cursor-pointer"
                       onClick={() => router.push(`/tasks?project=${task.projectId}`)}
                     >

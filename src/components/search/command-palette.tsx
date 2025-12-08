@@ -27,8 +27,7 @@ import {
   Home,
 } from 'lucide-react';
 import { useGlobalSearch } from '@/hooks/use-global-search';
-import { useAuth } from '@/components/providers/auth-provider';
-import { useWorkspaces } from '@/hooks/use-workspace';
+import { useCurrentWorkspace } from '@/hooks/use-current-workspace';
 
 type CommandAction = {
   id: string;
@@ -41,13 +40,11 @@ type CommandAction = {
 
 export function CommandPalette() {
   const router = useRouter();
-  const { user } = useAuth();
-  const { data: workspaces } = useWorkspaces(user?.$id);
-  const currentWorkspace = workspaces?.[0];
-  
+  const { currentWorkspace } = useCurrentWorkspace();
+
   const [open, setOpen] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState('');
-  
+
   const { data: searchResults = [], isLoading } = useGlobalSearch(
     searchQuery,
     currentWorkspace?.$id
@@ -247,8 +244,8 @@ export function CommandPalette() {
   // Filter actions by search query
   const filteredActions = searchQuery
     ? allActions.filter((action) =>
-        action.label.toLowerCase().includes(searchQuery.toLowerCase())
-      )
+      action.label.toLowerCase().includes(searchQuery.toLowerCase())
+    )
     : allActions;
 
   // Group actions

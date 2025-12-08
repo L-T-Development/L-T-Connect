@@ -19,6 +19,9 @@ import { TaskTimeTracking } from '@/components/time-tracking/task-time-tracking'
 import { useTasks, useAddTaskDependency, useRemoveTaskDependency } from '@/hooks/use-task';
 import { useAuth } from '@/components/providers/auth-provider';
 import { useWorkspace } from '@/hooks/use-workspace';
+import { useCurrentWorkspace } from '@/hooks/use-current-workspace';
+import { useTeamMembers, ROLE_CONFIG } from '@/hooks/use-team';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 // Helper function to parse label format "color:text"
 const parseLabel = (label: string) => {
@@ -79,6 +82,25 @@ export function TaskDetailsDialog({
   // Get user info for time tracking
   const { user } = useAuth();
   const { data: workspace } = useWorkspace();
+  const { currentWorkspace } = useCurrentWorkspace();
+  const { data: teamMembers = [] } = useTeamMembers(currentWorkspace?.$id);
+
+  // Get assignee details
+  const assignees = React.useMemo(() => {
+    if (!task?.assignedTo || !Array.isArray(task.assignedTo) || task.assignedTo.length === 0) {
+      return [];
+    }
+    return teamMembers.filter(member => task.assignedTo?.includes(member.userId));
+  }, [task, teamMembers]);
+
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map(n => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+  };
 
   if (!task) return null;
 
@@ -214,8 +236,8 @@ export function TaskDetailsDialog({
                   {labels.map((label, index) => {
                     const { color, text } = parseLabel(label);
                     return (
-                      <Badge 
-                        key={index} 
+                      <Badge
+                        key={index}
                         variant="outline"
                         className={cn(
                           "border",
@@ -232,20 +254,96 @@ export function TaskDetailsDialog({
           )}
 
           {/* Assignees */}
-          {task.assigneeIds && Array.isArray(task.assigneeIds) && task.assigneeIds.length > 0 && (
+          {assignees.length > 0 ? (
+            <>
+              <Separator />
+              <div>
+                <div className="flex items-center gap-2 text-sm font-medium mb-3">
+                  <User className="h-4 w-4" />
+                  Assigned To ({assignees.length})
+                </div>
+                <div className="space-y-2">
+                  {assignees.map((member) => (
+                    <div key={member.userId} className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent">
+                      <Avatar className="h-8 w-8">
+                        <AvatarImage src={member.avatar} alt={member.name} />
+                        <AvatarFallback className="text-xs">
+                          {getInitials(member.name)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-sm">{member.name}</div>
+                        <div className="text-xs text-muted-foreground truncate">{member.email}</div>
+                      </div>
+                      <Badge variant="outline" className="text-xs shrink-0">
+                        {ROLE_CONFIG[member.role].label}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          ) : (
             <>
               <Separator />
               <div>
                 <div className="flex items-center gap-2 text-sm font-medium mb-2">
                   <User className="h-4 w-4" />
-                  Assignees
+                  Assigned To
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  {task.assigneeIds.length} team member(s) assigned
-                </p>
+                <p className="text-sm text-muted-foreground">Unassigned</p>
               </div>
             </>
           )}
+
+          {/* Assigned By */}
+          {task.assignedBy && (() => {
+            // Find the assigner in team members
+            const assigner = teamMembers.find(member => member.userId === task.assignedBy);
+
+            if (!assigner) {
+              // Fallback if assigner not found in team members
+              return task.assignedByName ? (
+                <>
+                  <Separator />
+                  <div>
+                    <div className="flex items-center gap-2 text-sm font-medium mb-2">
+                      <User className="h-4 w-4" />
+                      Assigned By
+                    </div>
+                    <p className="text-sm text-muted-foreground">{task.assignedByName}</p>
+                  </div>
+                </>
+              ) : null;
+            }
+
+            return (
+              <>
+                <Separator />
+                <div>
+                  <div className="flex items-center gap-2 text-sm font-medium mb-3">
+                    <User className="h-4 w-4" />
+                    Assigned By
+                  </div>
+                  <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent">
+                    <Avatar className="h-8 w-8">
+                      <AvatarImage src={assigner.avatar} alt={assigner.name} />
+                      <AvatarFallback className="text-xs">
+                        {getInitials(assigner.name)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm">{assigner.name}</div>
+                      <div className="text-xs text-muted-foreground truncate">{assigner.email}</div>
+                    </div>
+                    <Badge variant="outline" className="text-xs shrink-0">
+                      {ROLE_CONFIG[assigner.role].label}
+                    </Badge>
+                  </div>
+                </div>
+              </>
+            );
+          })()}
 
           {/* Parent Task */}
           {task.parentTaskId && (
@@ -262,8 +360,8 @@ export function TaskDetailsDialog({
 
           {/* Task Dependencies */}
           <Separator />
-          <TaskDependencies 
-            task={task} 
+          <TaskDependencies
+            task={task}
             allTasks={allTasks}
             onAddDependency={handleAddDependency}
             onRemoveDependency={handleRemoveDependency}

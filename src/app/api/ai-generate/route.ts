@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error("AI Generation API Error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to generate AI response" },
+      { error: (error instanceof Error ? error.message : String(error)) || "Failed to generate AI response" },
       { status: 500 }
     );
   }

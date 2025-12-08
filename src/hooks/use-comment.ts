@@ -96,10 +96,10 @@ export function useCreateTaskComment() {
         description: 'Your comment has been posted successfully.',
       });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to add comment',
+        description: (error instanceof Error ? error.message : String(error)) || 'Failed to add comment',
         variant: 'destructive',
       });
     },
@@ -145,10 +145,10 @@ export function useUpdateTaskComment() {
         description: 'Your comment has been updated successfully.',
       });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to update comment',
+        description: (error instanceof Error ? error.message : String(error)) || 'Failed to update comment',
         variant: 'destructive',
       });
     },
@@ -180,10 +180,10 @@ export function useDeleteTaskComment() {
         description: 'Your comment has been deleted successfully.',
       });
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to delete comment',
+        description: (error instanceof Error ? error.message : String(error)) || 'Failed to delete comment',
         variant: 'destructive',
       });
     },

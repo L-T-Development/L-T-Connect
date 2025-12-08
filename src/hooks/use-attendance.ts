@@ -41,17 +41,17 @@ export function useTodayAttendance(userId?: string, workspaceId?: string) {
     queryKey: ['attendance', 'today', userId, workspaceId, today],
     queryFn: async () => {
       if (!userId) return null;
-      
+
       const queries = [
-        Query.equal('userId', userId), 
+        Query.equal('userId', userId),
         Query.equal('date', today)
       ];
-      
+
       // Add workspaceId filter if provided
       if (workspaceId) {
         queries.push(Query.equal('workspaceId', workspaceId));
       }
-      
+
       const response = await databases.listDocuments(
         DATABASE_ID,
         ATTENDANCE_COLLECTION_ID,
@@ -68,16 +68,16 @@ export function useTodayAttendance(userId?: string, workspaceId?: string) {
 export function useCheckIn() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (data: { 
-      userId: string; 
-      workspaceId: string; 
-      location?: string; 
-      notes?: string 
+    mutationFn: async (data: {
+      userId: string;
+      workspaceId: string;
+      location?: string;
+      notes?: string
     }) => {
       if (!data.workspaceId) {
         throw new Error('Workspace ID is required. Please select a workspace first.');
       }
-      
+
       const now = getCurrentDateTime();
       const date = getCurrentDate();
       const existing = await databases.listDocuments(
@@ -110,7 +110,7 @@ export function useCheckIn() {
     },
     onSuccess: async (attendance, variables) => {
       queryClient.invalidateQueries({ queryKey: ['attendance'] });
-      
+
       // Send notification if user checked in late
       const isLate = attendance.status === 'LATE';
       if (isLate) {
@@ -129,11 +129,27 @@ export function useCheckIn() {
           },
         });
       }
-      
+
       toast({ title: 'Checked In', description: 'You have successfully checked in for today.' });
     },
     onError: (error: Error) => {
-      toast({ title: 'Check-in Failed', description: error.message || 'Failed to check in', variant: 'destructive' });
+      const errorMessage = error.message || 'Failed to check in';
+      let description = errorMessage;
+
+      // Provide specific guidance based on error
+      if (errorMessage.includes('already checked in')) {
+        description = 'You have already checked in today. Please check out first if you need to check in again.';
+      } else if (errorMessage.includes('Workspace ID')) {
+        description = 'Please select a workspace before checking in.';
+      } else if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
+        description = 'Network error. Please check your internet connection and try again.';
+      }
+
+      toast({
+        title: 'Check-in Failed',
+        description,
+        variant: 'destructive'
+      });
     },
   });
 }
@@ -165,7 +181,23 @@ export function useCheckOut() {
       toast({ title: 'Checked Out', description: `You worked ${data.workHours?.toFixed(1)} hours today.` });
     },
     onError: (error: Error) => {
-      toast({ title: 'Check-out Failed', description: error.message || 'Failed to check out', variant: 'destructive' });
+      const errorMessage = error.message || 'Failed to check out';
+      let description = errorMessage;
+
+      // Provide specific guidance based on error
+      if (errorMessage.includes('already checked out')) {
+        description = 'You have already checked out for today.';
+      } else if (errorMessage.includes('not checked in')) {
+        description = 'You must check in before you can check out.';
+      } else if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
+        description = 'Network error. Please check your internet connection and try again.';
+      }
+
+      toast({
+        title: 'Check-out Failed',
+        description,
+        variant: 'destructive'
+      });
     },
   });
 }
@@ -179,19 +211,19 @@ export function useMonthlyAttendance(userId?: string, workspaceId?: string, year
     queryKey: ['attendance', 'monthly', userId, workspaceId, targetYear, targetMonth],
     queryFn: async () => {
       if (!userId) return [];
-      
+
       const queries = [
         Query.equal('userId', userId),
         Query.greaterThanEqual('date', start),
         Query.lessThanEqual('date', end),
         Query.orderDesc('date'),
       ];
-      
+
       // Add workspaceId filter if provided
       if (workspaceId) {
         queries.push(Query.equal('workspaceId', workspaceId));
       }
-      
+
       const response = await databases.listDocuments(
         DATABASE_ID,
         ATTENDANCE_COLLECTION_ID,
@@ -200,6 +232,7 @@ export function useMonthlyAttendance(userId?: string, workspaceId?: string, year
       return response.documents as unknown as Attendance[];
     },
     enabled: !!userId,
+    refetchInterval: 60000, // Refetch every minute for real-time updates
   });
 }
 
@@ -212,18 +245,18 @@ export function useAttendanceAnalytics(userId?: string, workspaceId?: string, ye
     queryFn: async () => {
       if (!userId) return null;
       const { start, end } = getMonthDateRange(targetYear, targetMonth);
-      
+
       const queries = [
-        Query.equal('userId', userId), 
-        Query.greaterThanEqual('date', start), 
+        Query.equal('userId', userId),
+        Query.greaterThanEqual('date', start),
         Query.lessThanEqual('date', end)
       ];
-      
+
       // Add workspaceId filter if provided
       if (workspaceId) {
         queries.push(Query.equal('workspaceId', workspaceId));
       }
-      
+
       const response = await databases.listDocuments(
         DATABASE_ID,
         ATTENDANCE_COLLECTION_ID,
@@ -235,5 +268,6 @@ export function useAttendanceAnalytics(userId?: string, workspaceId?: string, ye
       return { ...summary, records, period: { year: targetYear, month: targetMonth, start, end } };
     },
     enabled: !!userId,
+    refetchInterval: 60000, // Refetch every minute for real-time updates
   });
 }

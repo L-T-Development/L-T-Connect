@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { PlusCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import {
   Dialog,
   DialogContent,
@@ -15,21 +16,11 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+
 import { useCreateProject } from '@/hooks/use-project';
 import { useAuth } from '@/components/providers/auth-provider';
 import type { ProjectMethodology } from '@/types';
-import { Calendar } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { CalendarIcon } from 'lucide-react';
-import { format } from 'date-fns';
-import { cn } from '@/lib/utils';
+import { DatePicker } from '@/components/ui/date-picker';
 
 interface CreateProjectDialogProps {
   workspaceId: string;
@@ -44,12 +35,12 @@ export function CreateProjectDialog({ workspaceId }: CreateProjectDialogProps) {
   const [methodology, setMethodology] = React.useState<ProjectMethodology>('SCRUM');
   const [startDate, setStartDate] = React.useState<Date | undefined>(new Date());
   const [endDate, setEndDate] = React.useState<Date | undefined>();
-  
+
   const createProject = useCreateProject();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!user) return;
 
     await createProject.mutateAsync({
@@ -84,7 +75,7 @@ export function CreateProjectDialog({ workspaceId }: CreateProjectDialogProps) {
         <DialogHeader>
           <DialogTitle>Create New Project</DialogTitle>
           <DialogDescription>
-            Set up a new project with Scrum or Kanban methodology.
+            Set up a new project with Scrum methodology.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
@@ -129,87 +120,38 @@ export function CreateProjectDialog({ workspaceId }: CreateProjectDialogProps) {
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="methodology">Methodology *</Label>
-              <Select
-                value={methodology}
-                onValueChange={(value) => setMethodology(value as ProjectMethodology)}
-              >
-                <SelectTrigger id="methodology">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="SCRUM">
-                    <div className="flex flex-col">
-                      <span className="font-medium">Scrum</span>
-                      <span className="text-xs text-muted-foreground">
-                        Sprint-based iterative development
-                      </span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="KANBAN">
-                    <div className="flex flex-col">
-                      <span className="font-medium">Kanban</span>
-                      <span className="text-xs text-muted-foreground">
-                        Continuous flow with WIP limits
-                      </span>
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+              <Label htmlFor="methodology">Methodology</Label>
+              <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/50">
+                <div className="flex flex-col flex-1">
+                  <span className="font-medium">Scrum</span>
+                  <span className="text-xs text-muted-foreground">
+                    Sprint-based iterative development
+                  </span>
+                </div>
+                <Badge variant="secondary" className="shrink-0">Default</Badge>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
                 <Label>Start Date</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        'justify-start text-left font-normal',
-                        !startDate && 'text-muted-foreground'
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {startDate ? format(startDate, 'PPP') : 'Pick a date'}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <Calendar
-                      mode="single"
-                      selected={startDate}
-                      onSelect={setStartDate}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
+                <DatePicker
+                  date={startDate}
+                  onSelect={setStartDate}
+                  placeholder="Pick a date"
+                  buttonClassName="w-full"
+                />
               </div>
 
               <div className="grid gap-2">
                 <Label>End Date (Optional)</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        'justify-start text-left font-normal',
-                        !endDate && 'text-muted-foreground'
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {endDate ? format(endDate, 'PPP') : 'Pick a date'}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <Calendar
-                      mode="single"
-                      selected={endDate}
-                      onSelect={setEndDate}
-                      initialFocus
-                      disabled={(date: Date) => startDate ? date < startDate : false}
-                    />
-                  </PopoverContent>
-                </Popover>
+                <DatePicker
+                  date={endDate}
+                  onSelect={setEndDate}
+                  placeholder="Pick a date"
+                  disabled={(date: Date) => startDate ? date < startDate : false}
+                  buttonClassName="w-full"
+                />
               </div>
             </div>
           </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
@@ -30,11 +30,11 @@ export function RetrospectiveForm({ sprintId, projectId, sprintName, onSave }: R
   const { toast } = useToast();
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  
+
   const [wentWellInput, setWentWellInput] = useState('');
   const [didntGoWellInput, setDidntGoWellInput] = useState('');
   const [actionItemInput, setActionItemInput] = useState('');
-  
+
   const [retrospective, setRetrospective] = useState<RetrospectiveData>({
     wentWell: [],
     didntGoWell: [],
@@ -42,11 +42,7 @@ export function RetrospectiveForm({ sprintId, projectId, sprintName, onSave }: R
   });
 
   // Load existing retrospective data
-  useEffect(() => {
-    loadRetrospective();
-  }, [sprintId]);
-
-  const loadRetrospective = async () => {
+  const loadRetrospective = useCallback(async () => {
     try {
       setIsLoading(true);
       const response = await databases.listDocuments(
@@ -68,12 +64,16 @@ export function RetrospectiveForm({ sprintId, projectId, sprintName, onSave }: R
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [sprintId]);
+
+  useEffect(() => {
+    loadRetrospective();
+  }, [loadRetrospective]);
 
   const saveRetrospective = async (updatedData: RetrospectiveData) => {
     try {
       setIsSaving(true);
-      
+
       // Check if retrospective already exists
       const existing = await databases.listDocuments(
         process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!,
@@ -114,7 +114,7 @@ export function RetrospectiveForm({ sprintId, projectId, sprintName, onSave }: R
         title: 'Saved',
         description: 'Retrospective saved successfully',
       });
-      
+
       onSave?.();
     } catch (error) {
       console.error('Failed to save retrospective:', error);
@@ -192,7 +192,7 @@ export function RetrospectiveForm({ sprintId, projectId, sprintName, onSave }: R
           <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
           <h3 className="text-lg font-semibold text-green-900 dark:text-green-100">What Went Well</h3>
         </div>
-        
+
         <div className="space-y-3 mb-4">
           {retrospective.wentWell.map(item => (
             <div key={item.id} className="bg-white dark:bg-gray-800 rounded-lg p-3 flex items-start justify-between gap-3">
@@ -241,7 +241,7 @@ export function RetrospectiveForm({ sprintId, projectId, sprintName, onSave }: R
           <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400" />
           <h3 className="text-lg font-semibold text-red-900 dark:text-red-100">What Didn't Go Well</h3>
         </div>
-        
+
         <div className="space-y-3 mb-4">
           {retrospective.didntGoWell.map(item => (
             <div key={item.id} className="bg-white dark:bg-gray-800 rounded-lg p-3 flex items-start justify-between gap-3">
@@ -290,7 +290,7 @@ export function RetrospectiveForm({ sprintId, projectId, sprintName, onSave }: R
           <Lightbulb className="h-5 w-5 text-blue-600 dark:text-blue-400" />
           <h3 className="text-lg font-semibold text-blue-900 dark:text-blue-100">Action Items for Next Sprint</h3>
         </div>
-        
+
         <div className="space-y-3 mb-4">
           {retrospective.actionItems.map(item => (
             <div key={item.id} className="bg-white dark:bg-gray-800 rounded-lg p-3 flex items-start justify-between gap-3">

@@ -194,9 +194,9 @@ export function useCreateTimeEntry() {
       queryClient.invalidateQueries({ queryKey: ['time-entries', 'task', variables.taskId] });
       toast.success('Time entry created successfully');
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       console.error('Failed to create time entry:', error);
-      toast.error(error.message || 'Failed to create time entry');
+      toast.error((error instanceof Error ? error.message : String(error)) || 'Failed to create time entry');
     },
   });
 }
@@ -254,9 +254,9 @@ export function useStartTimer() {
       queryClient.invalidateQueries({ queryKey: ['active-timer', variables.userId] });
       toast.success('Timer started');
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       console.error('Failed to start timer:', error);
-      toast.error(error.message || 'Failed to start timer');
+      toast.error((error instanceof Error ? error.message : String(error)) || 'Failed to start timer');
     },
   });
 }
@@ -290,9 +290,9 @@ export function useToggleTimer() {
       queryClient.invalidateQueries({ queryKey: ['active-timer', variables.userId] });
       toast.success(variables.isPaused ? 'Timer paused' : 'Timer resumed');
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       console.error('Failed to toggle timer:', error);
-      toast.error(error.message || 'Failed to toggle timer');
+      toast.error((error instanceof Error ? error.message : String(error)) || 'Failed to toggle timer');
     },
   });
 }
@@ -372,9 +372,9 @@ export function useStopTimer() {
       queryClient.invalidateQueries({ queryKey: ['time-entries', 'task', variables.taskId] });
       toast.success('Timer stopped and time entry created');
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       console.error('Failed to stop timer:', error);
-      toast.error(error.message || 'Failed to stop timer');
+      toast.error((error instanceof Error ? error.message : String(error)) || 'Failed to stop timer');
     },
   });
 }
@@ -406,9 +406,9 @@ export function useUpdateTimeEntry() {
       queryClient.invalidateQueries({ queryKey: ['time-entries', variables.userId] });
       toast.success('Time entry updated');
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       console.error('Failed to update time entry:', error);
-      toast.error(error.message || 'Failed to update time entry');
+      toast.error((error instanceof Error ? error.message : String(error)) || 'Failed to update time entry');
     },
   });
 }
@@ -431,9 +431,9 @@ export function useDeleteTimeEntry() {
       queryClient.invalidateQueries({ queryKey: ['time-entries', variables.userId] });
       toast.success('Time entry deleted');
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       console.error('Failed to delete time entry:', error);
-      toast.error(error.message || 'Failed to delete time entry');
+      toast.error((error instanceof Error ? error.message : String(error)) || 'Failed to delete time entry');
     },
   });
 }
@@ -468,9 +468,9 @@ export function useApproveTimeEntry() {
       queryClient.invalidateQueries({ queryKey: ['time-entries'] });
       toast.success('Time entry approved');
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       console.error('Failed to approve time entry:', error);
-      toast.error(error.message || 'Failed to approve time entry');
+      toast.error((error instanceof Error ? error.message : String(error)) || 'Failed to approve time entry');
     },
   });
 }
@@ -504,9 +504,9 @@ export function useRejectTimeEntry() {
       queryClient.invalidateQueries({ queryKey: ['time-entries'] });
       toast.success('Time entry rejected');
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       console.error('Failed to reject time entry:', error);
-      toast.error(error.message || 'Failed to reject time entry');
+      toast.error((error instanceof Error ? error.message : String(error)) || 'Failed to reject time entry');
     },
   });
 }
