@@ -380,32 +380,6 @@ export default function SettingsPage() {
                   <Badge variant="outline">Coming Soon</Badge>
                 </div>
               </div>
-
-              <Separator />
-
-              <div className="space-y-4">
-                <h3 className="text-lg font-medium">Active Sessions</h3>
-                <p className="text-sm text-muted-foreground">
-                  Manage your active sessions across devices
-                </p>
-
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between p-4 rounded-lg border">
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                        <Globe className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <p className="font-medium">Chrome on Windows</p>
-                        <p className="text-sm text-muted-foreground">Current session</p>
-                      </div>
-                    </div>
-                    <Badge>Active Now</Badge>
-                  </div>
-                </div>
-
-                <Button variant="outline">Sign out all other sessions</Button>
-              </div>
             </CardContent>
           </Card>
         </TabsContent>
