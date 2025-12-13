@@ -6,8 +6,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useUpdateTask } from '@/hooks/use-task';
-import { useFunctionalRequirement } from '@/hooks/use-functional-requirement';
-import type { Task, TaskStatus } from '@/types';
+import { useFunctionalRequirement, useUpdateFunctionalRequirement } from '@/hooks/use-functional-requirement';
+import type { Task, TaskStatus, FunctionalRequirement, FunctionalRequirementStatus } from '@/types';
 import { cn } from '@/lib/utils';
 import { 
   AlertCircle, 
@@ -21,7 +21,31 @@ import { formatDistanceToNow } from 'date-fns';
 
 interface SprintBoardProps {
   tasks: Task[];
+  frs?: FunctionalRequirement[];
 }
+
+type BoardItem = 
+  | { type: 'TASK'; data: Task }
+  | { type: 'FR'; data: FunctionalRequirement };
+
+const getBoardStatusForFR = (status: FunctionalRequirementStatus): TaskStatus => {
+  switch (status) {
+    case 'IMPLEMENTED': return 'IN_PROGRESS';
+    case 'TESTED': return 'REVIEW';
+    case 'DEPLOYED': return 'DONE';
+    default: return 'TODO';
+  }
+};
+
+const getFRStatusForBoard = (status: TaskStatus): FunctionalRequirementStatus => {
+  switch (status) {
+    case 'TODO': return 'APPROVED';
+    case 'IN_PROGRESS': return 'IMPLEMENTED';
+    case 'REVIEW': return 'TESTED';
+    case 'DONE': return 'DEPLOYED';
+    default: return 'APPROVED';
+  }
+};
 
 const COLUMNS: { id: TaskStatus; label: string; color: string }[] = [
   { id: 'TODO', label: 'To Do', color: 'bg-slate-100 dark:bg-slate-900' },
@@ -54,27 +78,38 @@ function TaskFRBadge({ functionalRequirementId }: { functionalRequirementId?: st
   );
 }
 
-export function SprintBoard({ tasks }: SprintBoardProps) {
+export function SprintBoard({ tasks, frs = [] }: SprintBoardProps) {
   const updateTask = useUpdateTask();
-  const [localTasks, setLocalTasks] = React.useState(tasks);
+  const updateFR = useUpdateFunctionalRequirement();
+  
+  const [localItems, setLocalItems] = React.useState<BoardItem[]>([]);
 
   React.useEffect(() => {
-    setLocalTasks(tasks);
-  }, [tasks]);
+    const taskItems: BoardItem[] = tasks.map(t => ({ type: 'TASK', data: t }));
+    const frItems: BoardItem[] = frs.map(f => ({ type: 'FR', data: f }));
+    setLocalItems([...taskItems, ...frItems]);
+  }, [tasks, frs]);
 
-  const getTasksByColumn = (columnId: TaskStatus) => {
-    return localTasks
-      .filter(task => task.status === columnId)
-      .sort((a, b) => (a.position || 0) - (b.position || 0));
+  const getItemsByColumn = (columnId: TaskStatus) => {
+    return localItems
+      .filter(item => {
+        if (item.type === 'TASK') return item.data.status === columnId;
+        if (item.type === 'FR') return getBoardStatusForFR(item.data.status) === columnId;
+        return false;
+      })
+      .sort((a, b) => {
+         if (a.type === 'TASK' && b.type === 'TASK') {
+             return (a.data.position || 0) - (b.data.position || 0);
+         }
+         return 0; 
+      });
   };
 
   const handleDragEnd = async (result: DropResult) => {
     const { source, destination, draggableId } = result;
 
-    // Dropped outside the list
     if (!destination) return;
 
-    // No change
     if (
       source.droppableId === destination.droppableId &&
       source.index === destination.index
@@ -82,33 +117,41 @@ export function SprintBoard({ tasks }: SprintBoardProps) {
       return;
     }
 
-    const task = localTasks.find(t => t.$id === draggableId);
-    if (!task) return;
+    const item = localItems.find(i => i.data.$id === draggableId);
+    if (!item) return;
 
     const newStatus = destination.droppableId as TaskStatus;
 
     // Optimistic update
-    const updatedTasks = localTasks.map(t => {
-      if (t.$id === draggableId) {
-        return { ...t, status: newStatus };
+    const updatedItems = localItems.map(i => {
+      if (i.data.$id === draggableId) {
+        if (i.type === 'TASK') {
+           return { ...i, data: { ...i.data, status: newStatus } };
+        } else {
+           return { ...i, data: { ...i.data, status: getFRStatusForBoard(newStatus) } };
+        }
       }
-      return t;
+      return i;
     });
-    setLocalTasks(updatedTasks);
+    setLocalItems(updatedItems);
 
     // Update in database
     try {
-      await updateTask.mutateAsync({
-        taskId: task.$id,
-        projectId: task.projectId,
-        updates: {
-          status: newStatus,
-          position: destination.index,
-        },
-      });
+      if (item.type === 'TASK') {
+        await updateTask.mutateAsync({
+          taskId: item.data.$id,
+          projectId: item.data.projectId,
+          updates: { status: newStatus, position: destination.index },
+        });
+      } else {
+        await updateFR.mutateAsync({
+          requirementId: item.data.$id,
+          projectId: item.data.projectId,
+          updates: { status: getFRStatusForBoard(newStatus) },
+        });
+      }
     } catch (error) {
-      // Revert on error
-      setLocalTasks(localTasks);
+      setLocalItems(localItems); // Revert
     }
   };
 
@@ -116,7 +159,7 @@ export function SprintBoard({ tasks }: SprintBoardProps) {
     <DragDropContext onDragEnd={handleDragEnd}>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {COLUMNS.map(column => {
-          const columnTasks = getTasksByColumn(column.id);
+          const columnItems = getItemsByColumn(column.id);
 
           return (
             <div key={column.id} className="flex flex-col">
@@ -124,7 +167,7 @@ export function SprintBoard({ tasks }: SprintBoardProps) {
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="font-semibold text-sm">{column.label}</h3>
                   <Badge variant="secondary" className="text-xs">
-                    {columnTasks.length}
+                    {columnItems.length}
                   </Badge>
                 </div>
               </div>
@@ -139,10 +182,14 @@ export function SprintBoard({ tasks }: SprintBoardProps) {
                       snapshot.isDraggingOver ? 'bg-accent/50 border-primary' : 'bg-background'
                     )}
                   >
-                    {columnTasks.map((task, index) => (
+                    {columnItems.map((item, index) => {
+                      const isTask = item.type === 'TASK';
+                      const data = item.data;
+                      
+                      return (
                       <Draggable
-                        key={task.$id}
-                        draggableId={task.$id}
+                        key={data.$id}
+                        draggableId={data.$id}
                         index={index}
                       >
                         {(provided, snapshot) => (
@@ -152,95 +199,91 @@ export function SprintBoard({ tasks }: SprintBoardProps) {
                             {...provided.dragHandleProps}
                             className={cn(
                               "cursor-grab active:cursor-grabbing transition-all",
-                              snapshot.isDragging && "shadow-lg ring-2 ring-primary rotate-2"
+                              snapshot.isDragging && "shadow-lg ring-2 ring-primary rotate-2",
+                              !isTask && "border-blue-200 dark:border-blue-800" // Highlight FRs
                             )}
                           >
                             <CardContent className="p-3 space-y-2">
-                              {/* Task ID and Priority */}
+                              {/* ID and Priority */}
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-1.5">
                                   <Badge variant="outline" className="text-xs font-mono">
-                                    {task.hierarchyId}
+                                    {data.hierarchyId}
                                   </Badge>
-                                  {/* ✅ FR Badge for tasks linked to FRs */}
-                                  <TaskFRBadge functionalRequirementId={task.functionalRequirementId} />
+                                  {isTask && (
+                                     <TaskFRBadge functionalRequirementId={(data as Task).functionalRequirementId} />
+                                  )}
+                                  {!isTask && (
+                                     <Badge variant="secondary" className="text-[10px] bg-blue-100 text-blue-700">FR</Badge>
+                                  )}
                                 </div>
+                                {data.priority && priorityConfig[data.priority] && (
                                 <div className={cn(
                                   "w-2 h-2 rounded-full",
-                                  priorityConfig[task.priority].color
+                                  priorityConfig[data.priority].color
                                 )} />
+                                )}
                               </div>
 
-                              {/* Task Title */}
+                              {/* Title */}
                               <h4 className="text-sm font-medium line-clamp-2 leading-tight">
-                                {task.title}
+                                {data.title}
                               </h4>
 
                               {/* Metadata */}
                               <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
-                                {task.dueDate && (
+                                {isTask && (data as Task).dueDate && (
                                   <div className="flex items-center gap-1">
                                     <Calendar className="h-3 w-3" />
-                                    <span>{formatDistanceToNow(new Date(task.dueDate), { addSuffix: true })}</span>
+                                    <span>{formatDistanceToNow(new Date((data as Task).dueDate!), { addSuffix: true })}</span>
                                   </div>
                                 )}
-
-                                {(task.blockedBy?.length > 0 || task.blocks?.length > 0) && (
+                                
+                                {isTask && ((data as Task).blockedBy?.length > 0 || (data as Task).blocks?.length > 0) && (
                                   <div className="flex items-center gap-1 text-orange-500">
                                     <Link2 className="h-3 w-3" />
-                                    <span>{(task.blockedBy?.length || 0) + (task.blocks?.length || 0)}</span>
+                                    <span>{((data as Task).blockedBy?.length || 0) + ((data as Task).blocks?.length || 0)}</span>
                                   </div>
                                 )}
                               </div>
 
                               {/* Assignees */}
-                              {task.assigneeIds && task.assigneeIds.length > 0 && (
+                              {data.assignedTo && data.assignedTo.length > 0 && (
                                 <div className="flex items-center gap-1">
                                   <User className="h-3 w-3 text-muted-foreground" />
                                   <div className="flex -space-x-1">
-                                    {task.assigneeIds.slice(0, 3).map((assigneeId, idx) => (
+                                    {data.assignedTo.slice(0, 3).map((assigneeId, idx) => (
                                       <Avatar key={idx} className="h-5 w-5 border-2 border-background">
                                         <AvatarFallback className="text-[8px]">
                                           {assigneeId.substring(0, 2).toUpperCase()}
                                         </AvatarFallback>
                                       </Avatar>
                                     ))}
-                                    {task.assigneeIds.length > 3 && (
-                                      <Avatar className="h-5 w-5 border-2 border-background">
-                                        <AvatarFallback className="text-[8px]">
-                                          +{task.assigneeIds.length - 3}
-                                        </AvatarFallback>
-                                      </Avatar>
-                                    )}
                                   </div>
                                 </div>
                               )}
-
-                              {/* Labels */}
-                              {task.labels && task.labels.length > 0 && (
+                              
+                              {/* Task Labels */}
+                              {isTask && (data as Task).labels && (data as Task).labels.length > 0 && (
                                 <div className="flex flex-wrap gap-1">
-                                  {task.labels.slice(0, 2).map((label, idx) => (
+                                  {(data as Task).labels.slice(0, 2).map((label, idx) => (
                                     <Badge key={idx} variant="outline" className="text-[10px] px-1 py-0">
                                       {label.split(':')[1] || label}
                                     </Badge>
                                   ))}
-                                  {task.labels.length > 2 && (
-                                    <Badge variant="outline" className="text-[10px] px-1 py-0">
-                                      +{task.labels.length - 2}
-                                    </Badge>
-                                  )}
                                 </div>
                               )}
                             </CardContent>
                           </Card>
                         )}
                       </Draggable>
-                    ))}
+                    );
+                    })}
                     {provided.placeholder}
 
-                    {columnTasks.length === 0 && (
+                    {columnItems.length === 0 && (
                       <div className="flex items-center justify-center h-32 text-sm text-muted-foreground">
-                        Drop tasks here
+                        Drop items here
                       </div>
                     )}
                   </div>
