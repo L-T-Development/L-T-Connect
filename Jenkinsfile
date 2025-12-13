@@ -8,9 +8,9 @@ pipeline {
     
     environment {
         SONAR_TOKEN = credentials('sonar-token')
-        // IMPORTANT: Replace these with YOUR actual values from SonarCloud
-        SONAR_PROJECT_KEY = 'L-T-Development_L-T-Connect'  // ← CHANGE THIS
-        SONAR_ORGANIZATION = 'l-t-development'              // ← CHANGE THIS
+        // Replace with YOUR values from SonarCloud
+        SONAR_PROJECT_KEY = 'l-t-development_l-t-connect'
+        SONAR_ORGANIZATION = 'l-t-development'
     }
     
     options {
@@ -27,7 +27,7 @@ pipeline {
                 echo "📥 Building Branch: ${env.BRANCH_NAME}"
                 echo '========================================='
                 checkout scm
-                bat 'dir /s src'  // Show project structure
+                sh 'ls -la'  // Changed from 'bat' to 'sh'
                 echo '✅ Code checked out successfully'
             }
         }
@@ -37,8 +37,8 @@ pipeline {
                 echo '========================================='
                 echo '☕ Verifying Build Environment'
                 echo '========================================='
-                bat 'java -version'
-                bat 'mvn -version'
+                sh 'java -version'
+                sh 'mvn -version'
                 echo '✅ Environment verified'
             }
         }
@@ -51,7 +51,7 @@ pipeline {
                 echo '========================================='
                 echo '🏗️ INTERNS: Compiling Java Code'
                 echo '========================================='
-                bat 'mvn clean compile -DskipTests'
+                sh 'mvn clean compile -DskipTests'
                 echo '✅ Compilation successful!'
                 echo ''
                 echo '📌 Next Step: Create PR to dev branch'
@@ -69,7 +69,7 @@ pipeline {
                 echo '========================================='
                 echo '🏗️ FULL BUILD - Compiling Java Code'
                 echo '========================================='
-                bat 'mvn clean compile'
+                sh 'mvn clean compile'
                 echo '✅ Build successful!'
             }
         }
@@ -87,18 +87,17 @@ pipeline {
                 echo '========================================='
                 
                 withSonarQubeEnv('SonarCloud') {
-                    bat """
-                        mvn sonar:sonar ^
-                        -Dsonar.projectKey=%SONAR_PROJECT_KEY% ^
-                        -Dsonar.organization=%SONAR_ORGANIZATION% ^
-                        -Dsonar.host.url=https://sonarcloud.io ^
-                        -Dsonar.token=%SONAR_TOKEN%
+                    sh """
+                        mvn sonar:sonar \
+                        -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
+                        -Dsonar.organization=${SONAR_ORGANIZATION} \
+                        -Dsonar.host.url=https://sonarcloud.io \
+                        -Dsonar.token=${SONAR_TOKEN}
                     """
                 }
                 
                 echo ''
                 echo '✅ SonarQube analysis completed'
-                echo '📊 Check dashboard: https://sonarcloud.io'
             }
         }
         
@@ -135,7 +134,7 @@ pipeline {
                 echo '🧪 RUNNING UNIT TESTS'
                 echo '========================================='
                 
-                bat 'mvn test'
+                sh 'mvn test'
                 
                 echo ''
                 echo '✅ All tests completed'
@@ -144,28 +143,6 @@ pipeline {
                 always {
                     junit '**/target/surefire-reports/*.xml'
                     echo '📊 Test results published'
-                }
-            }
-        }
-        
-        stage('📊 Test Report - DEV/MAIN') {
-            when {
-                anyOf {
-                    branch 'dev'
-                    branch 'main'
-                }
-            }
-            steps {
-                echo '========================================='
-                echo '📊 GENERATING TEST REPORTS'
-                echo '========================================='
-                
-                script {
-                    def testResults = junit '**/target/surefire-reports/*.xml'
-                    echo "Total Tests: ${testResults.totalCount}"
-                    echo "Passed: ${testResults.passCount}"
-                    echo "Failed: ${testResults.failCount}"
-                    echo "Skipped: ${testResults.skipCount}"
                 }
             }
         }
@@ -194,20 +171,13 @@ pipeline {
                     echo '✅ CHECK 3: Quality Gate      - PASSED ✓'
                     echo '✅ CHECK 4: Unit Tests        - PASSED ✓'
                     echo ''
-                    echo '📌 Code quality verified and stable'
-                    echo ''
                 } else if (env.BRANCH_NAME == 'main') {
                     echo ''
                     echo '🚀 ============================================ 🚀'
                     echo '🚀   PRODUCTION READY - ALL CHECKS PASSED    🚀'
                     echo '🚀 ============================================ 🚀'
                     echo ''
-                    echo '✅ CHECK 1: Build             - PASSED ✓'
-                    echo '✅ CHECK 2: SonarQube         - PASSED ✓'
-                    echo '✅ CHECK 3: Quality Gate      - PASSED ✓'
-                    echo '✅ CHECK 4: Unit Tests        - PASSED ✓'
-                    echo ''
-                    echo '🎉 Code is production-ready!'
+                    echo '✅ ALL CHECKS PASSED'
                     echo ''
                 }
             }
@@ -217,8 +187,6 @@ pipeline {
             echo '❌ ============================================ ❌'
             echo '❌          PIPELINE FAILED!                  ❌'
             echo '❌ ============================================ ❌'
-            echo ''
-            echo '⚠️  Please check the logs above for details'
             echo ''
         }
     }
