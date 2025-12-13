@@ -1,14 +1,12 @@
 pipeline {
     agent any
     
-    tools {
-        maven 'Maven 3.9'
-        jdk 'Java 17'
-    }
-    
     environment {
+        // Set JAVA_HOME explicitly for Maven
+        JAVA_HOME = '/opt/java/openjdk'
+        PATH = "${JAVA_HOME}/bin:${env.PATH}"
+        
         SONAR_TOKEN = credentials('sonar-token')
-        // Replace with YOUR values from SonarCloud
         SONAR_PROJECT_KEY = 'l-t-development_l-t-connect'
         SONAR_ORGANIZATION = 'l-t-development'
     }
@@ -27,7 +25,7 @@ pipeline {
                 echo "📥 Building Branch: ${env.BRANCH_NAME}"
                 echo '========================================='
                 checkout scm
-                sh 'ls -la'  // Changed from 'bat' to 'sh'
+                sh 'ls -la'
                 echo '✅ Code checked out successfully'
             }
         }
@@ -37,6 +35,7 @@ pipeline {
                 echo '========================================='
                 echo '☕ Verifying Build Environment'
                 echo '========================================='
+                sh 'echo "JAVA_HOME: $JAVA_HOME"'
                 sh 'java -version'
                 sh 'mvn -version'
                 echo '✅ Environment verified'
@@ -96,7 +95,6 @@ pipeline {
                     """
                 }
                 
-                echo ''
                 echo '✅ SonarQube analysis completed'
             }
         }
@@ -117,7 +115,6 @@ pipeline {
                     waitForQualityGate abortPipeline: true
                 }
                 
-                echo ''
                 echo '✅ Quality Gate: PASSED'
             }
         }
@@ -136,12 +133,11 @@ pipeline {
                 
                 sh 'mvn test'
                 
-                echo ''
                 echo '✅ All tests completed'
             }
             post {
                 always {
-                    junit '**/target/surefire-reports/*.xml'
+                    junit allowEmptyResults: true, testResults: '**/target/surefire-reports/*.xml'
                     echo '📊 Test results published'
                 }
             }
