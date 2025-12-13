@@ -1,8 +1,11 @@
 pipeline {
     agent any
     
+    tools {
+        maven 'Maven'  // ← This tells Jenkins to use the auto-installed Maven
+    }
+    
     environment {
-        // Set JAVA_HOME explicitly for Maven
         JAVA_HOME = '/opt/java/openjdk'
         PATH = "${JAVA_HOME}/bin:${env.PATH}"
         
@@ -176,7 +179,7 @@ pipeline {
                     echo '✅ ALL CHECKS PASSED'
                     echo ''
                 }
-            }
+            } 
         }
         failure {
             echo ''
