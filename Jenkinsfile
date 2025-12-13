@@ -1,9 +1,16 @@
 pipeline {
     agent any
     
+    tools {
+        maven 'Maven 3.9'
+        jdk 'Java 17'
+    }
+    
     environment {
-        JAVA_HOME = '/opt/java/openjdk'
-        PATH = "${JAVA_HOME}/bin:${env.PATH}"
+        SONAR_TOKEN = credentials('sonar-token')
+        // IMPORTANT: Replace these with YOUR actual values from SonarCloud
+        SONAR_PROJECT_KEY = 'L-T-Development_L-T-Connect'  // ← CHANGE THIS
+        SONAR_ORGANIZATION = 'l-t-development'              // ← CHANGE THIS
     }
     
     options {
@@ -20,7 +27,7 @@ pipeline {
                 echo "📥 Building Branch: ${env.BRANCH_NAME}"
                 echo '========================================='
                 checkout scm
-                sh 'ls -la'
+                bat 'dir /s src'  // Show project structure
                 echo '✅ Code checked out successfully'
             }
         }
@@ -30,27 +37,28 @@ pipeline {
                 echo '========================================='
                 echo '☕ Verifying Build Environment'
                 echo '========================================='
-                sh 'java -version'
-                sh 'echo "Branch: ${BRANCH_NAME}"'
+                bat 'java -version'
+                bat 'mvn -version'
                 echo '✅ Environment verified'
             }
         }
         
-        stage('🔍 Code Quality - INTERNS') {
+        stage('🏗️ Build - INTERNS') {
             when {
                 branch 'interns'
             }
             steps {
                 echo '========================================='
-                echo '🔍 INTERNS: Basic Code Quality Check'
+                echo '🏗️ INTERNS: Compiling Java Code'
                 echo '========================================='
-                sh 'echo "  ✓ Basic syntax check - PASSED"'
-                sh 'echo "  ✓ File structure validation - PASSED"'
-                echo '✅ Basic checks passed! Ready to create PR to dev.'
+                bat 'mvn clean compile -DskipTests'
+                echo '✅ Compilation successful!'
+                echo ''
+                echo '📌 Next Step: Create PR to dev branch'
             }
         }
         
-        stage('🔍 Code Quality - DEV/MAIN') {
+        stage('🏗️ Build - DEV/MAIN') {
             when {
                 anyOf {
                     branch 'dev'
@@ -59,37 +67,14 @@ pipeline {
             }
             steps {
                 echo '========================================='
-                echo '🔍 FULL CODE QUALITY ANALYSIS'
+                echo '🏗️ FULL BUILD - Compiling Java Code'
                 echo '========================================='
-                
-                echo '📋 Running Checkstyle (Google Standards)...'
-                sh 'sleep 1'
-                sh 'echo "  ✓ Naming conventions - PASSED"'
-                sh 'echo "  ✓ Code complexity - PASSED"'
-                sh 'echo "  ✓ Documentation - PASSED"'
-                sh 'echo "✅ Checkstyle: PASSED"'
-                echo ''
-                
-                echo '🐛 Running PMD (Bug Detection)...'
-                sh 'sleep 1'
-                sh 'echo "  ✓ Unused variables - PASSED"'
-                sh 'echo "  ✓ Code duplication - PASSED"'
-                sh 'echo "  ✓ Method complexity - PASSED"'
-                sh 'echo "✅ PMD: PASSED"'
-                echo ''
-                
-                echo '🎨 Running SpotBugs...'
-                sh 'sleep 1'
-                sh 'echo "  ✓ Bytecode analysis - PASSED"'
-                sh 'echo "  ✓ Null pointer checks - PASSED"'
-                sh 'echo "✅ SpotBugs: PASSED"'
-                echo ''
-                
-                echo '✅ Code Quality: ALL CHECKS PASSED'
+                bat 'mvn clean compile'
+                echo '✅ Build successful!'
             }
         }
         
-        stage('🛡️ Security Scan - DEV/MAIN') {
+        stage('🔍 SonarQube Analysis - DEV/MAIN') {
             when {
                 anyOf {
                     branch 'dev'
@@ -98,29 +83,26 @@ pipeline {
             }
             steps {
                 echo '========================================='
-                echo '🛡️ SECURITY VULNERABILITY SCAN'
+                echo '🔍 RUNNING SONARQUBE CODE ANALYSIS'
                 echo '========================================='
                 
-                echo '🔒 Running OWASP Dependency Check...'
-                sh 'sleep 1'
-                sh 'echo "  ✓ Scanning for CVEs - PASSED"'
-                sh 'echo "  ✓ Checking outdated libraries - PASSED"'
-                sh 'echo "✅ No critical vulnerabilities found"'
-                echo ''
+                withSonarQubeEnv('SonarCloud') {
+                    bat """
+                        mvn sonar:sonar ^
+                        -Dsonar.projectKey=%SONAR_PROJECT_KEY% ^
+                        -Dsonar.organization=%SONAR_ORGANIZATION% ^
+                        -Dsonar.host.url=https://sonarcloud.io ^
+                        -Dsonar.token=%SONAR_TOKEN%
+                    """
+                }
                 
-                echo '🔐 Running Security Audit...'
-                sh 'sleep 1'
-                sh 'echo "  ✓ Hardcoded credentials check - PASSED"'
-                sh 'echo "  ✓ SQL injection analysis - PASSED"'
-                sh 'echo "  ✓ XSS vulnerability check - PASSED"'
-                sh 'echo "✅ Security Audit: PASSED"'
                 echo ''
-                
-                echo '✅ Security Scan: PASSED'
+                echo '✅ SonarQube analysis completed'
+                echo '📊 Check dashboard: https://sonarcloud.io'
             }
         }
         
-        stage('🧪 Automation Tests - DEV/MAIN') {
+        stage('✅ Quality Gate - DEV/MAIN') {
             when {
                 anyOf {
                     branch 'dev'
@@ -129,30 +111,19 @@ pipeline {
             }
             steps {
                 echo '========================================='
-                echo '🧪 SELENIUM AUTOMATION TESTS'
+                echo '✅ WAITING FOR QUALITY GATE RESULT'
                 echo '========================================='
                 
-                echo '🚀 Running Test Suite...'
-                sh 'sleep 2'
-                sh 'echo "  ✓ Test 1: User Login - PASSED"'
-                sh 'echo "  ✓ Test 2: Dashboard Load - PASSED"'
-                sh 'echo "  ✓ Test 3: Data Validation - PASSED"'
-                sh 'echo "  ✓ Test 4: Form Submission - PASSED"'
-                sh 'echo "  ✓ Test 5: User Logout - PASSED"'
-                echo ''
+                timeout(time: 5, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
                 
-                echo '📊 Test Summary:'
-                sh 'echo "  • Unit Tests: 45/45 passed (100%)"'
-                sh 'echo "  • Integration Tests: 12/12 passed (100%)"'
-                sh 'echo "  • E2E Tests: 8/8 passed (100%)"'
-                sh 'echo "  • Code Coverage: 85.6%"'
                 echo ''
-                
-                echo '✅ All Tests PASSED (65/65)'
+                echo '✅ Quality Gate: PASSED'
             }
         }
         
-        stage('📊 Generate Reports - DEV/MAIN') {
+        stage('🧪 Unit Tests - DEV/MAIN') {
             when {
                 anyOf {
                     branch 'dev'
@@ -161,12 +132,41 @@ pipeline {
             }
             steps {
                 echo '========================================='
-                echo '📊 GENERATING CI/CD REPORTS'
+                echo '🧪 RUNNING UNIT TESTS'
                 echo '========================================='
-                sh 'echo "  ✓ Test report generated"'
-                sh 'echo "  ✓ Coverage report generated"'
-                sh 'echo "  ✓ Quality report generated"'
-                echo '✅ Reports generated successfully'
+                
+                bat 'mvn test'
+                
+                echo ''
+                echo '✅ All tests completed'
+            }
+            post {
+                always {
+                    junit '**/target/surefire-reports/*.xml'
+                    echo '📊 Test results published'
+                }
+            }
+        }
+        
+        stage('📊 Test Report - DEV/MAIN') {
+            when {
+                anyOf {
+                    branch 'dev'
+                    branch 'main'
+                }
+            }
+            steps {
+                echo '========================================='
+                echo '📊 GENERATING TEST REPORTS'
+                echo '========================================='
+                
+                script {
+                    def testResults = junit '**/target/surefire-reports/*.xml'
+                    echo "Total Tests: ${testResults.totalCount}"
+                    echo "Passed: ${testResults.passCount}"
+                    echo "Failed: ${testResults.failCount}"
+                    echo "Skipped: ${testResults.skipCount}"
+                }
             }
         }
     }
@@ -177,15 +177,11 @@ pipeline {
                 if (env.BRANCH_NAME == 'interns') {
                     echo ''
                     echo '✅ ============================================ ✅'
-                    echo '✅   INTERNS BRANCH: BASIC CHECKS PASSED     ✅'
+                    echo '✅   INTERNS BRANCH: BUILD SUCCESSFUL        ✅'
                     echo '✅ ============================================ ✅'
                     echo ''
-                    echo '📌 Next Steps:'
-                    echo '   1. Create Pull Request: interns → dev'
-                    echo '   2. Jenkins will run full CI/CD checks'
-                    echo '   3. Wait for Team Lead review'
-                    echo '   4. Resolve any comments'
-                    echo '   5. Merge when approved'
+                    echo '📌 Code compiled successfully'
+                    echo '📌 Ready to create Pull Request to dev'
                     echo ''
                 } else if (env.BRANCH_NAME == 'dev') {
                     echo ''
@@ -193,11 +189,12 @@ pipeline {
                     echo '🎉     ALL CI/CD CHECKS PASSED - DEV         🎉'
                     echo '🎉 ============================================ 🎉'
                     echo ''
-                    echo '✅ CHECK 1: Code Quality      - PASSED ✓'
-                    echo '✅ CHECK 2: Security Scan     - PASSED ✓'
-                    echo '✅ CHECK 3: Automation Tests  - PASSED ✓'
+                    echo '✅ CHECK 1: Build             - PASSED ✓'
+                    echo '✅ CHECK 2: SonarQube         - PASSED ✓'
+                    echo '✅ CHECK 3: Quality Gate      - PASSED ✓'
+                    echo '✅ CHECK 4: Unit Tests        - PASSED ✓'
                     echo ''
-                    echo '📌 Code is stable and ready for production!'
+                    echo '📌 Code quality verified and stable'
                     echo ''
                 } else if (env.BRANCH_NAME == 'main') {
                     echo ''
@@ -205,36 +202,24 @@ pipeline {
                     echo '🚀   PRODUCTION READY - ALL CHECKS PASSED    🚀'
                     echo '🚀 ============================================ 🚀'
                     echo ''
-                    echo '✅ CHECK 1: Code Quality      - PASSED ✓'
-                    echo '✅ CHECK 2: Security Scan     - PASSED ✓'
-                    echo '✅ CHECK 3: Automation Tests  - PASSED ✓'
+                    echo '✅ CHECK 1: Build             - PASSED ✓'
+                    echo '✅ CHECK 2: SonarQube         - PASSED ✓'
+                    echo '✅ CHECK 3: Quality Gate      - PASSED ✓'
+                    echo '✅ CHECK 4: Unit Tests        - PASSED ✓'
                     echo ''
-                    echo '🎉 Ready for deployment!'
+                    echo '🎉 Code is production-ready!'
                     echo ''
                 }
             }
         }
         failure {
-            script {
-                echo ''
-                echo '❌ ============================================ ❌'
-                echo '❌          PIPELINE FAILED!                  ❌'
-                echo '❌ ============================================ ❌'
-                echo ''
-                if (env.BRANCH_NAME == 'interns') {
-                    echo '📌 Action Required:'
-                    echo '   1. Fix the issues in your code'
-                    echo '   2. Commit and push to interns branch'
-                    echo '   3. Pipeline will run automatically'
-                    echo ''
-                } else {
-                    echo '📌 Action Required:'
-                    echo '   1. Check console output for errors'
-                    echo '   2. Fix the failing checks'
-                    echo '   3. Cannot merge until all checks pass'
-                    echo ''
-                }
-            }
+            echo ''
+            echo '❌ ============================================ ❌'
+            echo '❌          PIPELINE FAILED!                  ❌'
+            echo '❌ ============================================ ❌'
+            echo ''
+            echo '⚠️  Please check the logs above for details'
+            echo ''
         }
     }
 }
