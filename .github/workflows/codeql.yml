@@ -16,6 +16,7 @@ jobs:
     permissions:
       security-events: write
       contents: read
+      actions: read
 
     steps:
     - name: Checkout repository
@@ -25,7 +26,7 @@ jobs:
       uses: github/codeql-action/init@v4
       with:
         languages: javascript-typescript
-        queries: security-extended,security-and-quality
+        queries: +security-extended,security-and-quality
 
     # Next.js does not require build for CodeQL
     - name: Perform CodeQL Analysis
