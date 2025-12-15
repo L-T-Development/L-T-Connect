@@ -6,9 +6,12 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
 import {
   Select,
@@ -27,11 +30,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Calendar, User, FileText, Trash2, CheckCircle2, Clock, Archive, MessageSquare } from 'lucide-react';
+import { Calendar, User, FileText, Trash2, CheckCircle2, Clock, Archive } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import { useClientRequirement, useUpdateClientRequirement, useDeleteClientRequirement } from '@/hooks/use-client-requirement';
 import type { RequirementPriority, RequirementStatus } from '@/types';
-import { CommentSection } from '@/components/comments/comment-section';
 
 const statusConfig: Record<RequirementStatus, { label: string; icon: React.ComponentType<{ className?: string }>; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
   DRAFT: { label: 'Draft', icon: FileText, variant: 'secondary' },
@@ -67,26 +69,51 @@ export function ClientRequirementDetailDialog({
   const deleteRequirement = useDeleteClientRequirement();
   const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
 
+  // Local state for editing
+  const [title, setTitle] = React.useState('');
+  const [description, setDescription] = React.useState('');
+  const [status, setStatus] = React.useState<RequirementStatus>('DRAFT');
+  const [priority, setPriority] = React.useState<RequirementPriority>('LOW');
+  const [hasChanges, setHasChanges] = React.useState(false);
+  const lastLoadedId = React.useRef<string | null>(null);
+
+  React.useEffect(() => {
+    if (requirement) {
+      const isNewRequirement = lastLoadedId.current !== requirement.$id;
+      
+      if (isNewRequirement || !hasChanges) {
+        setTitle(requirement.title);
+        setDescription(requirement.description);
+        setStatus(requirement.status);
+        setPriority(requirement.priority);
+        
+        if (isNewRequirement) {
+          setHasChanges(false);
+          lastLoadedId.current = requirement.$id;
+        }
+      }
+    }
+  }, [requirement, hasChanges]);
+
   if (!requirement) return null;
 
-  const status = statusConfig[requirement.status];
-  const priority = priorityConfig[requirement.priority];
-  const StatusIcon = status.icon;
+  const currentStatusConfig = statusConfig[status];
+  const currentPriorityConfig = priorityConfig[priority];
+  const StatusIcon = currentStatusConfig.icon;
 
-  const handleStatusChange = async (newStatus: RequirementStatus) => {
+  const handleSave = async () => {
     await updateRequirement.mutateAsync({
       requirementId: requirement.$id,
       projectId,
-      updates: { status: newStatus },
+      updates: {
+        title,
+        description,
+        status,
+        priority,
+      },
     });
-  };
-
-  const handlePriorityChange = async (newPriority: RequirementPriority) => {
-    await updateRequirement.mutateAsync({
-      requirementId: requirement.$id,
-      projectId,
-      updates: { priority: newPriority },
-    });
+    setHasChanges(false);
+    onOpenChange(false);
   };
 
   const handleDelete = async () => {
@@ -103,28 +130,29 @@ export function ClientRequirementDetailDialog({
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader className="space-y-4">
+            <DialogTitle className="sr-only">Requirement Details</DialogTitle>
             <div className="flex items-start justify-between gap-4">
               <div className="space-y-3 flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <Badge variant={status.variant} className="flex items-center gap-1">
+                  <Badge variant={currentStatusConfig.variant} className="flex items-center gap-1">
                     <StatusIcon className="h-3 w-3" />
-                    {status.label}
+                    {currentStatusConfig.label}
                   </Badge>
                   <div className="flex items-center gap-1">
-                    <span className={`text-lg ${priority.color}`}>●</span>
-                    <span className="text-sm text-muted-foreground">{priority.label} Priority</span>
+                    <span className={`text-lg ${currentPriorityConfig.color}`}>●</span>
+                    <span className="text-sm text-muted-foreground">{currentPriorityConfig.label} Priority</span>
                   </div>
                 </div>
-                <DialogTitle className="text-2xl break-words">{requirement.title}</DialogTitle>
+                <Input 
+                  value={title} 
+                  onChange={(e) => {
+                    setTitle(e.target.value);
+                    setHasChanges(true);
+                  }}
+                  className="text-xl font-semibold h-auto py-2"
+                  placeholder="Requirement Title"
+                />
               </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setDeleteDialogOpen(true)}
-                className="text-destructive hover:text-destructive shrink-0"
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
             </div>
           </DialogHeader>
 
@@ -149,9 +177,15 @@ export function ClientRequirementDetailDialog({
                 <FileText className="h-4 w-4" />
                 Description
               </div>
-              <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                {requirement.description}
-              </p>
+              <Textarea 
+                value={description}
+                onChange={(e) => {
+                  setDescription(e.target.value);
+                  setHasChanges(true);
+                }}
+                className="min-h-[150px]"
+                placeholder="Requirement Description"
+              />
             </div>
 
             <Separator />
@@ -160,7 +194,10 @@ export function ClientRequirementDetailDialog({
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Status</label>
-                <Select value={requirement.status} onValueChange={(value) => handleStatusChange(value as RequirementStatus)}>
+                <Select value={status} onValueChange={(value) => {
+                  setStatus(value as RequirementStatus);
+                  setHasChanges(true);
+                }}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -177,7 +214,10 @@ export function ClientRequirementDetailDialog({
 
               <div className="space-y-2">
                 <label className="text-sm font-medium">Priority</label>
-                <Select value={requirement.priority} onValueChange={(value) => handlePriorityChange(value as RequirementPriority)}>
+                <Select value={priority} onValueChange={(value) => {
+                  setPriority(value as RequirementPriority);
+                  setHasChanges(true);
+                }}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -210,18 +250,26 @@ export function ClientRequirementDetailDialog({
                 <p>{formatDate(requirement.$updatedAt)}</p>
               </div>
             </div>
-
-            <Separator />
-
-            {/* Comments Section */}
-            <div>
-              <div className="flex items-center gap-2 text-sm font-medium mb-4">
-                <MessageSquare className="h-4 w-4" />
-                Comments
-              </div>
-              <CommentSection entityId={requirement.$id} />
-            </div>
           </div>
+
+          <DialogFooter className="sm:justify-between">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setDeleteDialogOpen(true)}
+              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => onOpenChange(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleSave} disabled={!hasChanges}>
+                Save Changes
+              </Button>
+            </div>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
