@@ -7,12 +7,23 @@ import { useWorkspaces } from '@/hooks/use-workspace';
 import { useSprint } from '@/hooks/use-sprint';
 import { useTasks } from '@/hooks/use-task';
 import { useTasksRealtime, useSprintsRealtime } from '@/hooks/use-realtime';
+import { useFunctionalRequirementsBySprint } from '@/hooks/use-functional-requirement';
+import { FunctionalRequirementStatus, TaskStatus } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ArrowLeft, BarChart3, ListChecks } from 'lucide-react';
 import { SprintBoard } from '@/components/sprints/sprint-board';
 import { BurndownChart } from '@/components/sprints/burndown-chart';
+
+const getBoardStatusForFR = (status: FunctionalRequirementStatus): TaskStatus => {
+  switch (status) {
+    case 'IMPLEMENTED': return 'IN_PROGRESS';
+    case 'TESTED': return 'REVIEW';
+    case 'DEPLOYED': return 'DONE';
+    default: return 'TODO';
+  }
+};
 
 export default function SprintBoardPage() {
   const params = useParams();
@@ -23,6 +34,7 @@ export default function SprintBoardPage() {
 
   const { data: sprint, isLoading: sprintLoading } = useSprint(sprintId);
   const { data: allTasks, isLoading: tasksLoading } = useTasks(sprint?.projectId);
+  const { data: sprintFRs } = useFunctionalRequirementsBySprint(sprintId);
 
   // Enable real-time updates
   useTasksRealtime(sprint?.projectId);
@@ -34,13 +46,30 @@ export default function SprintBoardPage() {
     return allTasks.filter((task) => task.sprintId === sprintId);
   }, [allTasks, sprintId]);
 
+  // Filter out FRs that are already represented by tasks in this sprint
+  const visibleFRs = React.useMemo(() => {
+    if (!sprintFRs) return [];
+    const linkedFRIds = new Set(sprintTasks.map(t => t.functionalRequirementId).filter(Boolean));
+    return sprintFRs.filter(fr => !linkedFRIds.has(fr.$id));
+  }, [sprintFRs, sprintTasks]);
+
   // Calculate stats
   const stats = React.useMemo(() => {
-    const total = sprintTasks.length;
-    const completed = sprintTasks.filter(t => t.status === 'DONE').length;
-    const inProgress = sprintTasks.filter(t => t.status === 'IN_PROGRESS').length;
-    const review = sprintTasks.filter(t => t.status === 'REVIEW').length;
-    const todo = sprintTasks.filter(t => t.status === 'TODO').length;
+    const frStatuses = visibleFRs.map(fr => getBoardStatusForFR(fr.status));
+    
+    const total = sprintTasks.length + visibleFRs.length;
+    
+    const completed = sprintTasks.filter(t => t.status === 'DONE').length + 
+                      frStatuses.filter(s => s === 'DONE').length;
+                      
+    const inProgress = sprintTasks.filter(t => t.status === 'IN_PROGRESS').length + 
+                       frStatuses.filter(s => s === 'IN_PROGRESS').length;
+                       
+    const review = sprintTasks.filter(t => t.status === 'REVIEW').length + 
+                   frStatuses.filter(s => s === 'REVIEW').length;
+                   
+    const todo = sprintTasks.filter(t => t.status === 'TODO').length + 
+                 frStatuses.filter(s => s === 'TODO').length;
 
     return {
       total,
@@ -50,7 +79,7 @@ export default function SprintBoardPage() {
       todo,
       completionRate: total > 0 ? Math.round((completed / total) * 100) : 0,
     };
-  }, [sprintTasks]);
+  }, [sprintTasks, visibleFRs]);
 
   if (sprintLoading || tasksLoading) {
     return (
@@ -182,7 +211,7 @@ export default function SprintBoardPage() {
         </TabsList>
 
         <TabsContent value="board" className="space-y-4">
-          <SprintBoard tasks={sprintTasks} />
+          <SprintBoard tasks={sprintTasks} frs={visibleFRs} />
         </TabsContent>
 
         <TabsContent value="burndown" className="space-y-4">

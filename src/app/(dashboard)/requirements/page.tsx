@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/components/providers/auth-provider';
 import { useCurrentWorkspace } from '@/hooks/use-current-workspace';
 import { useProjects } from '@/hooks/use-project';
@@ -53,6 +54,7 @@ export default function RequirementsPage() {
   const { user } = useAuth();
   const { currentWorkspace } = useCurrentWorkspace();
   const { data: projects = [] } = useProjects(currentWorkspace?.$id);
+  const searchParams = useSearchParams();
 
   const [selectedProjectId, setSelectedProjectId] = React.useState<string>('');
   const [searchQuery, setSearchQuery] = React.useState('');
@@ -63,21 +65,28 @@ export default function RequirementsPage() {
   const [selectedRequirement, setSelectedRequirement] = React.useState<string | null>(null);
   const [isSavingGenerated, setIsSavingGenerated] = React.useState(false);
 
-  // Restore project selection from localStorage or set first project as default
+  // Handle project selection: prioritize URL param, then localStorage, then first project
   React.useEffect(() => {
     const STORAGE_KEY = 'selected-project-id';
+    const urlProjectId = searchParams.get('projectId');
     const savedProjectId = localStorage.getItem(STORAGE_KEY);
 
-    if (savedProjectId && projects.some(p => p.$id === savedProjectId)) {
-      // Restore saved project if it still exists
+    // Priority 1: URL parameter (from "View Requirements" button)
+    if (urlProjectId && projects.some(p => p.$id === urlProjectId)) {
+      setSelectedProjectId(urlProjectId);
+      localStorage.setItem(STORAGE_KEY, urlProjectId);
+    }
+    // Priority 2: localStorage (previously selected)
+    else if (savedProjectId && projects.some(p => p.$id === savedProjectId)) {
       setSelectedProjectId(savedProjectId);
-    } else if (projects.length > 0 && !selectedProjectId) {
-      // Default to first project if no saved selection
+    }
+    // Priority 3: First project as default
+    else if (projects.length > 0 && !selectedProjectId) {
       const firstProjectId = projects[0].$id;
       setSelectedProjectId(firstProjectId);
       localStorage.setItem(STORAGE_KEY, firstProjectId);
     }
-  }, [projects, selectedProjectId]);
+  }, [projects, selectedProjectId, searchParams]);
 
   // Save project selection to localStorage when changed
   const handleProjectChange = React.useCallback((projectId: string) => {
