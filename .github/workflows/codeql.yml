@@ -1,5 +1,32 @@
+name: "CodeQL Advanced"
+
 on:
   push:
-    branches: [ main, dev ]
+    branches: [ "main", "dev" ]
   pull_request:
-    branches: [ main, dev ]
+    branches: [ "main", "dev" ]
+  schedule:
+    - cron: '45 22 * * 0'
+
+jobs:
+  analyze:
+    name: Analyze (JavaScript / TypeScript)
+    runs-on: ubuntu-latest
+
+    permissions:
+      security-events: write
+      contents: read
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v4
+      with:
+        languages: javascript-typescript
+        queries: security-extended,security-and-quality
+
+    # Next.js does not require build for CodeQL
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v4
