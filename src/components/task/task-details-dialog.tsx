@@ -130,27 +130,25 @@ export function TaskDetailsDialog({
               </div>
               <DialogTitle className="text-2xl">{task.title}</DialogTitle>
             </div>
-            {(user?.role == 'MANAGER' || user?.role == 'ASSISTANT_MANAGER') && (
-              <div className="flex gap-2">
-                {onEdit && (
-                  <Button variant="outline" size="sm" onClick={() => onEdit(task)}>
-                    <Edit className="h-4 w-4 mr-1" />
-                    Edit
-                  </Button>
-                )}
-                {onDelete && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onDelete(task.$id)}
-                    className="text-destructive hover:text-destructive"
-                  >
-                    <Trash2 className="h-4 w-4 mr-1" />
-                    Delete
-                  </Button>
-                )}
-              </div>
-            )}
+            <div className="flex gap-2">
+              {onEdit && (
+                <Button variant="outline" size="sm" onClick={() => onEdit(task)}>
+                  <Edit className="h-4 w-4 mr-1" />
+                  Edit
+                </Button>
+              )}
+              {onDelete && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onDelete(task.$id)}
+                  className="text-destructive hover:text-destructive"
+                >
+                  <Trash2 className="h-4 w-4 mr-1" />
+                  Delete
+                </Button>
+              )}
+            </div>
           </div>
         </DialogHeader>
 
