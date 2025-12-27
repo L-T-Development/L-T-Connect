@@ -8,7 +8,8 @@ import { generateTaskId, generateTaskIdWithoutFR } from '@/lib/hierarchy-id-gene
 
 const DATABASE_ID = process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!;
 const TASKS_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_TASKS_COLLECTION_ID!;
-const FUNCTIONAL_REQUIREMENTS_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_FUNCTIONAL_REQUIREMENTS_COLLECTION_ID!;
+const FUNCTIONAL_REQUIREMENTS_COLLECTION_ID =
+  process.env.NEXT_PUBLIC_APPWRITE_FUNCTIONAL_REQUIREMENTS_COLLECTION_ID!;
 const SPRINTS_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_SPRINTS_COLLECTION_ID!;
 const PROJECTS_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_PROJECTS_COLLECTION_ID!;
 
@@ -18,24 +19,40 @@ export function useTasks(projectId?: string) {
     queryFn: async () => {
       if (!projectId) return [];
 
-      const response = await databases.listDocuments(
-        DATABASE_ID,
-        TASKS_COLLECTION_ID,
-        [Query.equal('projectId', projectId), Query.orderAsc('position')]
-      );
+      const response = await databases.listDocuments(DATABASE_ID, TASKS_COLLECTION_ID, [
+        Query.equal('projectId', projectId),
+        Query.orderAsc('position'),
+      ]);
 
       // Parse JSON fields
-      const tasks = response.documents.map(doc => ({
+      const tasks = response.documents.map((doc) => ({
         ...doc,
         labels: typeof doc.labels === 'string' && doc.labels ? JSON.parse(doc.labels) : [],
-        attachments: typeof doc.attachments === 'string' && doc.attachments ? JSON.parse(doc.attachments) : [],
-        customFields: typeof doc.customFields === 'string' && doc.customFields ? JSON.parse(doc.customFields) : {},
-        assigneeIds: typeof doc.assigneeIds === 'string' && doc.assigneeIds ? JSON.parse(doc.assigneeIds) : [],
+        attachments:
+          typeof doc.attachments === 'string' && doc.attachments ? JSON.parse(doc.attachments) : [],
+        customFields:
+          typeof doc.customFields === 'string' && doc.customFields
+            ? JSON.parse(doc.customFields)
+            : {},
+        assigneeIds:
+          typeof doc.assigneeIds === 'string' && doc.assigneeIds ? JSON.parse(doc.assigneeIds) : [],
         // ✅ assignedTo and assignedToNames are array types in DB - use directly
-        assignedTo: Array.isArray(doc.assignedTo) ? doc.assignedTo : [],
+        assignedTo: Array.isArray(doc.assignedTo)
+          ? doc.assignedTo
+          : Array.isArray(doc.assigneeIds)
+            ? doc.assigneeIds
+            : [],
         assignedToNames: Array.isArray(doc.assignedToNames) ? doc.assignedToNames : [],
-        blockedBy: doc.blockedBy ? (typeof doc.blockedBy === 'string' ? JSON.parse(doc.blockedBy) : doc.blockedBy) : [],
-        blocks: doc.blocks ? (typeof doc.blocks === 'string' ? JSON.parse(doc.blocks) : doc.blocks) : [],
+        blockedBy: doc.blockedBy
+          ? typeof doc.blockedBy === 'string'
+            ? JSON.parse(doc.blockedBy)
+            : doc.blockedBy
+          : [],
+        blocks: doc.blocks
+          ? typeof doc.blocks === 'string'
+            ? JSON.parse(doc.blocks)
+            : doc.blocks
+          : [],
       })) as unknown as Task[];
 
       return tasks;
@@ -51,24 +68,37 @@ export function useWorkspaceTasks(workspaceId?: string) {
     queryFn: async () => {
       if (!workspaceId) return [];
 
-      const response = await databases.listDocuments(
-        DATABASE_ID,
-        TASKS_COLLECTION_ID,
-        [Query.equal('workspaceId', workspaceId), Query.orderDesc('$createdAt'), Query.limit(1000)]
-      );
+      const response = await databases.listDocuments(DATABASE_ID, TASKS_COLLECTION_ID, [
+        Query.equal('workspaceId', workspaceId),
+        Query.orderDesc('$createdAt'),
+        Query.limit(1000),
+      ]);
 
       // Parse JSON fields
-      const tasks = response.documents.map(doc => ({
+      const tasks = response.documents.map((doc) => ({
         ...doc,
         labels: typeof doc.labels === 'string' && doc.labels ? JSON.parse(doc.labels) : [],
-        attachments: typeof doc.attachments === 'string' && doc.attachments ? JSON.parse(doc.attachments) : [],
-        customFields: typeof doc.customFields === 'string' && doc.customFields ? JSON.parse(doc.customFields) : {},
-        assigneeIds: typeof doc.assigneeIds === 'string' && doc.assigneeIds ? JSON.parse(doc.assigneeIds) : [],
+        attachments:
+          typeof doc.attachments === 'string' && doc.attachments ? JSON.parse(doc.attachments) : [],
+        customFields:
+          typeof doc.customFields === 'string' && doc.customFields
+            ? JSON.parse(doc.customFields)
+            : {},
+        assigneeIds:
+          typeof doc.assigneeIds === 'string' && doc.assigneeIds ? JSON.parse(doc.assigneeIds) : [],
         // ✅ assignedTo and assignedToNames are array types in DB - use directly
         assignedTo: Array.isArray(doc.assignedTo) ? doc.assignedTo : [],
         assignedToNames: Array.isArray(doc.assignedToNames) ? doc.assignedToNames : [],
-        blockedBy: doc.blockedBy ? (typeof doc.blockedBy === 'string' ? JSON.parse(doc.blockedBy) : doc.blockedBy) : [],
-        blocks: doc.blocks ? (typeof doc.blocks === 'string' ? JSON.parse(doc.blocks) : doc.blocks) : [],
+        blockedBy: doc.blockedBy
+          ? typeof doc.blockedBy === 'string'
+            ? JSON.parse(doc.blockedBy)
+            : doc.blockedBy
+          : [],
+        blocks: doc.blocks
+          ? typeof doc.blocks === 'string'
+            ? JSON.parse(doc.blocks)
+            : doc.blocks
+          : [],
       })) as unknown as Task[];
 
       return tasks;
@@ -83,24 +113,38 @@ export function useTask(taskId?: string) {
     queryFn: async () => {
       if (!taskId) return null;
 
-      const response = await databases.getDocument(
-        DATABASE_ID,
-        TASKS_COLLECTION_ID,
-        taskId
-      );
+      const response = await databases.getDocument(DATABASE_ID, TASKS_COLLECTION_ID, taskId);
 
       // Parse JSON fields
       const task = {
         ...response,
-        labels: typeof response.labels === 'string' && response.labels ? JSON.parse(response.labels) : [],
-        attachments: typeof response.attachments === 'string' && response.attachments ? JSON.parse(response.attachments) : [],
-        customFields: typeof response.customFields === 'string' && response.customFields ? JSON.parse(response.customFields) : {},
-        assigneeIds: typeof response.assigneeIds === 'string' && response.assigneeIds ? JSON.parse(response.assigneeIds) : [],
+        labels:
+          typeof response.labels === 'string' && response.labels ? JSON.parse(response.labels) : [],
+        attachments:
+          typeof response.attachments === 'string' && response.attachments
+            ? JSON.parse(response.attachments)
+            : [],
+        customFields:
+          typeof response.customFields === 'string' && response.customFields
+            ? JSON.parse(response.customFields)
+            : {},
+        assigneeIds:
+          typeof response.assigneeIds === 'string' && response.assigneeIds
+            ? JSON.parse(response.assigneeIds)
+            : [],
         // ✅ assignedTo and assignedToNames are array types in DB - use directly
         assignedTo: Array.isArray(response.assignedTo) ? response.assignedTo : [],
         assignedToNames: Array.isArray(response.assignedToNames) ? response.assignedToNames : [],
-        blockedBy: response.blockedBy ? (typeof response.blockedBy === 'string' ? JSON.parse(response.blockedBy) : response.blockedBy) : [],
-        blocks: response.blocks ? (typeof response.blocks === 'string' ? JSON.parse(response.blocks) : response.blocks) : [],
+        blockedBy: response.blockedBy
+          ? typeof response.blockedBy === 'string'
+            ? JSON.parse(response.blockedBy)
+            : response.blockedBy
+          : [],
+        blocks: response.blocks
+          ? typeof response.blocks === 'string'
+            ? JSON.parse(response.blocks)
+            : response.blocks
+          : [],
       } as unknown as Task;
 
       return task;
@@ -116,26 +160,35 @@ export function useTasksByFunctionalRequirement(functionalRequirementId?: string
     queryFn: async () => {
       if (!functionalRequirementId) return [];
 
-      const response = await databases.listDocuments(
-        DATABASE_ID,
-        TASKS_COLLECTION_ID,
-        [
-          Query.equal('functionalRequirementId', functionalRequirementId),
-          Query.orderAsc('position')
-        ]
-      );
+      const response = await databases.listDocuments(DATABASE_ID, TASKS_COLLECTION_ID, [
+        Query.equal('functionalRequirementId', functionalRequirementId),
+        Query.orderAsc('position'),
+      ]);
 
       // Parse JSON fields
-      const tasks = response.documents.map(doc => ({
+      const tasks = response.documents.map((doc) => ({
         ...doc,
         labels: typeof doc.labels === 'string' && doc.labels ? JSON.parse(doc.labels) : [],
-        attachments: typeof doc.attachments === 'string' && doc.attachments ? JSON.parse(doc.attachments) : [],
-        customFields: typeof doc.customFields === 'string' && doc.customFields ? JSON.parse(doc.customFields) : {},
-        assigneeIds: typeof doc.assigneeIds === 'string' && doc.assigneeIds ? JSON.parse(doc.assigneeIds) : [],
+        attachments:
+          typeof doc.attachments === 'string' && doc.attachments ? JSON.parse(doc.attachments) : [],
+        customFields:
+          typeof doc.customFields === 'string' && doc.customFields
+            ? JSON.parse(doc.customFields)
+            : {},
+        assigneeIds:
+          typeof doc.assigneeIds === 'string' && doc.assigneeIds ? JSON.parse(doc.assigneeIds) : [],
         assignedTo: Array.isArray(doc.assignedTo) ? doc.assignedTo : [],
         assignedToNames: Array.isArray(doc.assignedToNames) ? doc.assignedToNames : [],
-        blockedBy: doc.blockedBy ? (typeof doc.blockedBy === 'string' ? JSON.parse(doc.blockedBy) : doc.blockedBy) : [],
-        blocks: doc.blocks ? (typeof doc.blocks === 'string' ? JSON.parse(doc.blocks) : doc.blocks) : [],
+        blockedBy: doc.blockedBy
+          ? typeof doc.blockedBy === 'string'
+            ? JSON.parse(doc.blockedBy)
+            : doc.blockedBy
+          : [],
+        blocks: doc.blocks
+          ? typeof doc.blocks === 'string'
+            ? JSON.parse(doc.blocks)
+            : doc.blocks
+          : [],
       })) as unknown as Task[];
 
       return tasks;
@@ -175,11 +228,9 @@ export function useCreateTask() {
       }
 
       // Get current tasks for counting
-      const existingTasks = await databases.listDocuments(
-        DATABASE_ID,
-        TASKS_COLLECTION_ID,
-        [Query.equal('projectId', data.projectId)]
-      );
+      const existingTasks = await databases.listDocuments(DATABASE_ID, TASKS_COLLECTION_ID, [
+        Query.equal('projectId', data.projectId),
+      ]);
 
       let hierarchyId: string;
 
@@ -193,20 +244,24 @@ export function useCreateTask() {
         const parentHierarchyId = parentTask.hierarchyId;
 
         const siblings = existingTasks.documents.filter(
-          t => t.parentTaskId === data.parentTaskId
+          (t) => t.parentTaskId === data.parentTaskId
         );
         const subtaskNumber = (siblings.length + 1).toString().padStart(2, '0');
         hierarchyId = `${parentHierarchyId}.${subtaskNumber}`;
       } else {
         // Top-level task: generate from FR → Sprint → Task hierarchy
-        const topLevelTasks = existingTasks.documents.filter(t => !t.parentTaskId);
+        const topLevelTasks = existingTasks.documents.filter((t) => !t.parentTaskId);
         const taskSequence = topLevelTasks.length + 1;
 
         if (data.functionalRequirementId && data.sprintId) {
           // Full hierarchy: FR → Sprint → Task
           try {
             const [fr, sprint] = await Promise.all([
-              databases.getDocument(DATABASE_ID, FUNCTIONAL_REQUIREMENTS_COLLECTION_ID, data.functionalRequirementId),
+              databases.getDocument(
+                DATABASE_ID,
+                FUNCTIONAL_REQUIREMENTS_COLLECTION_ID,
+                data.functionalRequirementId
+              ),
               databases.getDocument(DATABASE_ID, SPRINTS_COLLECTION_ID, data.sprintId),
             ]);
 
@@ -337,7 +392,8 @@ export function useCreateTask() {
     onError: (error: Error) => {
       toast({
         title: 'Error',
-        description: (error instanceof Error ? error.message : String(error)) || 'Failed to create task',
+        description:
+          (error instanceof Error ? error.message : String(error)) || 'Failed to create task',
         variant: 'destructive',
       });
     },
@@ -348,11 +404,7 @@ export function useUpdateTask() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (data: {
-      taskId: string;
-      projectId: string;
-      updates: Partial<Task>;
-    }) => {
+    mutationFn: async (data: { taskId: string; projectId: string; updates: Partial<Task> }) => {
       const { taskId, updates } = data;
 
       // Stringify complex fields if they exist in updates
@@ -373,9 +425,7 @@ export function useUpdateTask() {
       // ✅ Handle assignedTo and assignedToNames as arrays (not strings)
       // These fields are array types in the database
       if (updates.assignedTo !== undefined) {
-        processedUpdates.assignedTo = Array.isArray(updates.assignedTo)
-          ? updates.assignedTo
-          : [];
+        processedUpdates.assignedTo = Array.isArray(updates.assignedTo) ? updates.assignedTo : [];
       }
       if (updates.assignedToNames !== undefined) {
         processedUpdates.assignedToNames = Array.isArray(updates.assignedToNames)
@@ -411,11 +461,7 @@ export function useUpdateTask() {
       // Optimistically update the cache
       queryClient.setQueryData<Task[]>(['tasks', data.projectId], (old) => {
         if (!old) return old;
-        return old.map(task =>
-          task.$id === data.taskId
-            ? { ...task, ...data.updates }
-            : task
-        );
+        return old.map((task) => (task.$id === data.taskId ? { ...task, ...data.updates } : task));
       });
 
       return { previousTasks };
@@ -427,7 +473,8 @@ export function useUpdateTask() {
       }
       toast({
         title: 'Error',
-        description: (error instanceof Error ? error.message : String(error)) || 'Failed to update task',
+        description:
+          (error instanceof Error ? error.message : String(error)) || 'Failed to update task',
         variant: 'destructive',
       });
     },
@@ -439,16 +486,16 @@ export function useUpdateTask() {
       if (updatedTask.functionalRequirementId && variables.updates.status) {
         try {
           // Get all tasks linked to this FR
-          const frTasks = await databases.listDocuments(
-            DATABASE_ID,
-            TASKS_COLLECTION_ID,
-            [Query.equal('functionalRequirementId', updatedTask.functionalRequirementId)]
-          );
+          const frTasks = await databases.listDocuments(DATABASE_ID, TASKS_COLLECTION_ID, [
+            Query.equal('functionalRequirementId', updatedTask.functionalRequirementId),
+          ]);
 
           // Calculate new FR status from all its tasks
           const tasks = frTasks.documents as unknown as Task[];
-          const allDone = tasks.length > 0 && tasks.every(t => t.status === 'DONE');
-          const anyInProgress = tasks.some(t => t.status === 'IN_PROGRESS' || t.status === 'REVIEW');
+          const allDone = tasks.length > 0 && tasks.every((t) => t.status === 'DONE');
+          const anyInProgress = tasks.some(
+            (t) => t.status === 'IN_PROGRESS' || t.status === 'REVIEW'
+          );
 
           let newFRStatus: FunctionalRequirement['status'];
           // If there are no tasks linked, FR should remain or become DRAFT
@@ -477,7 +524,6 @@ export function useUpdateTask() {
           queryClient.invalidateQueries({
             queryKey: ['functional-requirements', variables.projectId],
           });
-
         } catch (error) {
           console.error('Error syncing FR status:', error);
           // Don't fail the task update if FR sync fails
@@ -506,8 +552,14 @@ export function useUpdateTask() {
 
       // Notification for task assignment changes
       if (updates.assigneeIds) {
-        const previousTask = queryClient.getQueryData<Task[]>(['tasks', variables.projectId])
-          ?.find(t => t.$id === variables.taskId);
+        // console.log(updates.assigneeIds);
+
+        const task = await databases.getDocument(DATABASE_ID, TASKS_COLLECTION_ID, updatedTask.$id);
+        console.log(task);
+
+        const previousTask = queryClient
+          .getQueryData<Task[]>(['tasks', variables.projectId])
+          ?.find((t) => t.$id === variables.taskId);
 
         if (previousTask) {
           // Ensure assigneeIds is an array
@@ -522,7 +574,7 @@ export function useUpdateTask() {
             : [];
 
           const newAssignees = updatesAssignees.filter(
-            id => id && typeof id === 'string' && !previousAssignees.includes(id)
+            (id) => id && typeof id === 'string' && !previousAssignees.includes(id)
           );
 
           // Notify newly assigned users
@@ -554,7 +606,9 @@ export function useUpdateTask() {
             ? [assigneesData]
             : [];
 
-        const validAssignees = assignees.filter(id => id && typeof id === 'string' && id.trim() !== '');
+        const validAssignees = assignees.filter(
+          (id) => id && typeof id === 'string' && id.trim() !== ''
+        );
 
         if (validAssignees.length > 0) {
           await createBulkNotifications({
@@ -594,12 +648,10 @@ export function useUpdateTaskStatus() {
     }) => {
       const { taskId, status, position } = data;
 
-      const response = await databases.updateDocument(
-        DATABASE_ID,
-        TASKS_COLLECTION_ID,
-        taskId,
-        { status, position }
-      );
+      const response = await databases.updateDocument(DATABASE_ID, TASKS_COLLECTION_ID, taskId, {
+        status,
+        position,
+      });
 
       return response as unknown as Task;
     },
@@ -613,7 +665,7 @@ export function useUpdateTaskStatus() {
       // Optimistically update the cache
       queryClient.setQueryData<Task[]>(['tasks', data.projectId], (old) => {
         if (!old) return old;
-        return old.map(task =>
+        return old.map((task) =>
           task.$id === data.taskId
             ? { ...task, status: data.status, position: data.position }
             : task
@@ -629,7 +681,9 @@ export function useUpdateTaskStatus() {
       }
       toast({
         title: 'Error',
-        description: (error instanceof Error ? error.message : String(error)) || 'Failed to update task status',
+        description:
+          (error instanceof Error ? error.message : String(error)) ||
+          'Failed to update task status',
         variant: 'destructive',
       });
     },
@@ -654,7 +708,8 @@ export function useUpdateTaskStatus() {
       if (variables.status === 'DONE') {
         try {
           // Query workspace members to find managers/admins
-          const WORKSPACE_MEMBERS_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_COLLECTION_WORKSPACE_MEMBERS_ID!;
+          const WORKSPACE_MEMBERS_COLLECTION_ID =
+            process.env.NEXT_PUBLIC_APPWRITE_COLLECTION_WORKSPACE_MEMBERS_ID!;
           const membersResponse = await databases.listDocuments(
             DATABASE_ID,
             WORKSPACE_MEMBERS_COLLECTION_ID,
@@ -703,7 +758,9 @@ export function useUpdateTaskStatus() {
             ? [assigneesData]
             : [];
 
-        const validAssignees = assignees.filter(id => id && typeof id === 'string' && id.trim() !== '');
+        const validAssignees = assignees.filter(
+          (id) => id && typeof id === 'string' && id.trim() !== ''
+        );
 
         if (validAssignees.length > 0) {
           await createBulkNotifications({
@@ -731,11 +788,7 @@ export function useDeleteTask() {
 
   return useMutation({
     mutationFn: async (data: { taskId: string; projectId: string }) => {
-      await databases.deleteDocument(
-        DATABASE_ID,
-        TASKS_COLLECTION_ID,
-        data.taskId
-      );
+      await databases.deleteDocument(DATABASE_ID, TASKS_COLLECTION_ID, data.taskId);
       return data;
     },
     onSuccess: (data) => {
@@ -748,7 +801,8 @@ export function useDeleteTask() {
     onError: (error: Error) => {
       toast({
         title: 'Error',
-        description: (error instanceof Error ? error.message : String(error)) || 'Failed to delete task',
+        description:
+          (error instanceof Error ? error.message : String(error)) || 'Failed to delete task',
         variant: 'destructive',
       });
     },
@@ -765,12 +819,9 @@ export function useReorderTasks() {
     }) => {
       // Update positions for multiple tasks
       const updates = data.tasks.map((task) =>
-        databases.updateDocument(
-          DATABASE_ID,
-          TASKS_COLLECTION_ID,
-          task.taskId,
-          { position: task.position }
-        )
+        databases.updateDocument(DATABASE_ID, TASKS_COLLECTION_ID, task.taskId, {
+          position: task.position,
+        })
       );
 
       await Promise.all(updates);
@@ -782,7 +833,8 @@ export function useReorderTasks() {
     onError: (error: Error) => {
       toast({
         title: 'Error',
-        description: (error instanceof Error ? error.message : String(error)) || 'Failed to reorder tasks',
+        description:
+          (error instanceof Error ? error.message : String(error)) || 'Failed to reorder tasks',
         variant: 'destructive',
       });
     },
@@ -797,7 +849,9 @@ export function useAddTaskDependency() {
       // NOTE: Task dependencies disabled due to Appwrite attribute limit
       // The tasks collection has reached its maximum attribute count/size
       // blockedBy and blocks attributes cannot be added
-      throw new Error('Task dependencies are currently disabled due to database limits. Contact admin to upgrade database plan.');
+      throw new Error(
+        'Task dependencies are currently disabled due to database limits. Contact admin to upgrade database plan.'
+      );
 
       /* Original implementation disabled:
       try {
@@ -809,11 +863,11 @@ export function useAddTaskDependency() {
         );
 
         // Parse dependency arrays
-        const blockedBy = typeof task.blockedBy === 'string' 
-          ? JSON.parse(task.blockedBy || '[]') 
+        const blockedBy = typeof task.blockedBy === 'string'
+          ? JSON.parse(task.blockedBy || '[]')
           : task.blockedBy || [];
-        const blocks = typeof task.blocks === 'string' 
-          ? JSON.parse(task.blocks || '[]') 
+        const blocks = typeof task.blocks === 'string'
+          ? JSON.parse(task.blocks || '[]')
           : task.blocks || [];
 
         // Add dependency
@@ -841,11 +895,11 @@ export function useAddTaskDependency() {
           data.targetTaskId
         );
 
-        const targetBlockedBy = typeof targetTask.blockedBy === 'string' 
-          ? JSON.parse(targetTask.blockedBy || '[]') 
+        const targetBlockedBy = typeof targetTask.blockedBy === 'string'
+          ? JSON.parse(targetTask.blockedBy || '[]')
           : targetTask.blockedBy || [];
-        const targetBlocks = typeof targetTask.blocks === 'string' 
-          ? JSON.parse(targetTask.blocks || '[]') 
+        const targetBlocks = typeof targetTask.blocks === 'string'
+          ? JSON.parse(targetTask.blocks || '[]')
           : targetTask.blocks || [];
 
         if (data.type === 'blockedBy' && !targetBlocks.includes(data.taskId)) {
@@ -867,7 +921,7 @@ export function useAddTaskDependency() {
         return data;
       } catch (error: unknown) {
         // Check if error is due to missing attributes
-        if ((error instanceof Error ? error.message : String(error))?.includes('Unknown attribute') && 
+        if ((error instanceof Error ? error.message : String(error))?.includes('Unknown attribute') &&
             ((error instanceof Error ? error.message : String(error))?.includes('blockedBy') || (error instanceof Error ? error.message : String(error))?.includes('blocks'))) {
           throw new Error('Database schema missing dependency attributes. Please add "blockedBy" and "blocks" to Tasks collection. See APPWRITE_SCHEMA_MIGRATION.md');
         }
@@ -885,7 +939,7 @@ export function useAddTaskDependency() {
     onError: (error: Error) => {
       toast({
         title: 'Dependencies disabled',
-        description: (error instanceof Error ? error.message : String(error)),
+        description: error instanceof Error ? error.message : String(error),
         variant: 'destructive',
       });
     },
@@ -900,7 +954,9 @@ export function useRemoveTaskDependency() {
       // NOTE: Task dependencies disabled due to Appwrite attribute limit
       // The tasks collection has reached its maximum attribute count/size
       // blockedBy and blocks attributes cannot be added
-      throw new Error('Task dependencies are currently disabled due to database limits. Contact admin to upgrade database plan.');
+      throw new Error(
+        'Task dependencies are currently disabled due to database limits. Contact admin to upgrade database plan.'
+      );
 
       /* Original implementation disabled:
       // Get current task
@@ -911,11 +967,11 @@ export function useRemoveTaskDependency() {
       );
 
       // Parse dependency arrays
-      let blockedBy = typeof task.blockedBy === 'string' 
-        ? JSON.parse(task.blockedBy || '[]') 
+      let blockedBy = typeof task.blockedBy === 'string'
+        ? JSON.parse(task.blockedBy || '[]')
         : task.blockedBy || [];
-      let blocks = typeof task.blocks === 'string' 
-        ? JSON.parse(task.blocks || '[]') 
+      let blocks = typeof task.blocks === 'string'
+        ? JSON.parse(task.blocks || '[]')
         : task.blocks || [];
 
       // Remove dependency
@@ -943,11 +999,11 @@ export function useRemoveTaskDependency() {
         data.targetTaskId
       );
 
-      let targetBlockedBy = typeof targetTask.blockedBy === 'string' 
-        ? JSON.parse(targetTask.blockedBy || '[]') 
+      let targetBlockedBy = typeof targetTask.blockedBy === 'string'
+        ? JSON.parse(targetTask.blockedBy || '[]')
         : targetTask.blockedBy || [];
-      let targetBlocks = typeof targetTask.blocks === 'string' 
-        ? JSON.parse(targetTask.blocks || '[]') 
+      let targetBlocks = typeof targetTask.blocks === 'string'
+        ? JSON.parse(targetTask.blocks || '[]')
         : targetTask.blocks || [];
 
       if (data.type === 'blockedBy') {
@@ -979,10 +1035,9 @@ export function useRemoveTaskDependency() {
     onError: (error: Error) => {
       toast({
         title: 'Dependencies disabled',
-        description: (error instanceof Error ? error.message : String(error)),
+        description: error instanceof Error ? error.message : String(error),
         variant: 'destructive',
       });
     },
   });
 }
-
