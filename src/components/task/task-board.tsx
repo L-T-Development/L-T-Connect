@@ -16,13 +16,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useTasksRealtime } from '@/hooks/use-realtime';
 import type { Task, TaskStatus } from '@/types';
-import {
-  MoreVertical,
-  Clock,
-  AlertCircle,
-  Circle,
-  Calendar,
-} from 'lucide-react';
+import { MoreVertical, Clock, AlertCircle, Circle, Calendar } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 
 // Helper function to parse label format "color:text"
@@ -49,6 +43,7 @@ const labelColorMap: Record<string, string> = {
 interface TaskBoardProps {
   tasks: Task[];
   projectId?: string;
+  showMenu?: boolean;
   onTaskMove: (taskId: string, newStatus: TaskStatus, newPosition: number) => void;
   onTaskClick: (task: Task) => void;
   onTaskEdit: (task: Task) => void;
@@ -73,6 +68,7 @@ const priorityConfig = {
 export function TaskBoard({
   tasks,
   projectId,
+  showMenu = false,
   onTaskMove,
   onTaskClick,
   onTaskEdit,
@@ -112,10 +108,7 @@ export function TaskBoard({
     if (!destination) return;
 
     // Dropped in same position
-    if (
-      source.droppableId === destination.droppableId &&
-      source.index === destination.index
-    ) {
+    if (source.droppableId === destination.droppableId && source.index === destination.index) {
       return;
     }
 
@@ -131,12 +124,9 @@ export function TaskBoard({
         {COLUMNS.map((column) => {
           const columnTasks = tasksByStatus[column.id];
           const hasItems = columnTasks.length > 0;
-          
+
           return (
-            <div
-              key={column.id}
-              className="flex flex-col min-h-[200px]"
-            >
+            <div key={column.id} className="flex flex-col min-h-[200px]">
               {/* Column Header */}
               <div className={cn('rounded-t-lg p-3 border-b', column.color)}>
                 <div className="flex items-center justify-between">
@@ -162,154 +152,153 @@ export function TaskBoard({
                     )}
                   >
                     {columnTasks.map((task, index) => (
-                    <Draggable
-                      key={task.$id}
-                      draggableId={task.$id}
-                      index={index}
-                    >
-                      {(provided, snapshot) => (
-                        <Card
-                          ref={provided.innerRef}
-                          {...provided.draggableProps}
-                          {...provided.dragHandleProps}
-                          className={cn(
-                            'cursor-pointer hover:shadow-lg transition-shadow',
-                            snapshot.isDragging && 'shadow-xl ring-2 ring-primary'
-                          )}
-                          onClick={() => onTaskClick(task)}
-                        >
-                          <CardHeader className="p-3 pb-2">
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="flex-1 space-y-1">
-                                <div className="flex items-center gap-2">
-                                  <Badge variant="outline" className="font-mono text-xs">
-                                    {task.hierarchyId}
-                                  </Badge>
-                                  <Badge
-                                    variant={
-                                      priorityConfig[task.priority].color as any
-                                    }
-                                    className="text-xs"
-                                  >
-                                    {priorityConfig[task.priority].label}
-                                  </Badge>
-                                </div>
-                                <h4 className="font-medium text-sm leading-tight line-clamp-2">
-                                  {task.title}
-                                </h4>
-                              </div>
-
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                                  <Button variant="ghost" size="icon" className="h-6 w-6">
-                                    <MoreVertical className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      onTaskEdit(task);
-                                    }}
-                                  >
-                                    Edit Task
-                                  </DropdownMenuItem>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem
-                                    className="text-destructive"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      onTaskDelete(task.$id);
-                                    }}
-                                  >
-                                    Delete Task
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
-                          </CardHeader>
-
-                          <CardContent className="p-3 pt-0 space-y-2">
-                            {/* Description preview */}
-                            {task.description && (
-                              <p className="text-xs text-muted-foreground line-clamp-2">
-                                {task.description}
-                              </p>
+                      <Draggable key={task.$id} draggableId={task.$id} index={index}>
+                        {(provided, snapshot) => (
+                          <Card
+                            ref={provided.innerRef}
+                            {...provided.draggableProps}
+                            {...provided.dragHandleProps}
+                            className={cn(
+                              'cursor-pointer hover:shadow-lg transition-shadow',
+                              snapshot.isDragging && 'shadow-xl ring-2 ring-primary'
                             )}
-
-                            {/* Labels */}
-                            {task.labels && task.labels.length > 0 && (
-                              <div className="flex flex-wrap gap-1">
-                                {task.labels.slice(0, 3).map((label, i) => {
-                                  const { color, text } = parseLabel(label);
-                                  return (
-                                    <Badge 
-                                      key={i} 
-                                      variant="outline" 
-                                      className={cn(
-                                        "text-xs border",
-                                        labelColorMap[color] || labelColorMap.gray
-                                      )}
-                                    >
-                                      {text}
+                            onClick={() => onTaskClick(task)}
+                          >
+                            <CardHeader className="p-3 pb-2">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex-1 space-y-1">
+                                  <div className="flex items-center gap-2">
+                                    <Badge variant="outline" className="font-mono text-xs">
+                                      {task.hierarchyId}
                                     </Badge>
-                                  );
-                                })}
-                                {task.labels.length > 3 && (
-                                  <Badge variant="secondary" className="text-xs">
-                                    +{task.labels.length - 3}
-                                  </Badge>
-                                )}
-                              </div>
-                            )}
-
-                            {/* Footer */}
-                            <div className="flex items-center justify-between text-xs text-muted-foreground">
-                              <div className="flex items-center gap-2">
-                                {task.dueDate && (
-                                  <div className="flex items-center gap-1">
-                                    <Calendar className="h-3 w-3" />
-                                    <span>{formatDate(task.dueDate)}</span>
+                                    <Badge
+                                      variant={priorityConfig[task.priority].color as any}
+                                      className="text-xs"
+                                    >
+                                      {priorityConfig[task.priority].label}
+                                    </Badge>
                                   </div>
-                                )}
-                                {task.estimatedHours && task.estimatedHours > 0 && (
-                                  <div className="flex items-center gap-1">
-                                    <Clock className="h-3 w-3" />
-                                    <span>{task.estimatedHours}h</span>
-                                  </div>
+                                  <h4 className="font-medium text-sm leading-tight line-clamp-2">
+                                    {task.title}
+                                  </h4>
+                                </div>
+
+                                {showMenu === true && (
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger
+                                      asChild
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <Button variant="ghost" size="icon" className="h-6 w-6">
+                                        <MoreVertical className="h-4 w-4" />
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                      <DropdownMenuItem
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          onTaskEdit(task);
+                                        }}
+                                      >
+                                        Edit Task
+                                      </DropdownMenuItem>
+                                      <DropdownMenuSeparator />
+                                      <DropdownMenuItem
+                                        className="text-destructive"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          onTaskDelete(task.$id);
+                                        }}
+                                      >
+                                        Delete Task
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
                                 )}
                               </div>
+                            </CardHeader>
 
-                              <div className="flex items-center gap-1">
-                                {task.assigneeIds && task.assigneeIds.length > 0 && (
-                                  <Avatar className="h-5 w-5">
-                                    <AvatarFallback className="text-xs">
-                                      {task.assigneeIds.length > 1
-                                        ? `+${task.assigneeIds.length}`
-                                        : 'U'}
-                                    </AvatarFallback>
-                                  </Avatar>
-                                )}
+                            <CardContent className="p-3 pt-0 space-y-2">
+                              {/* Description preview */}
+                              {task.description && (
+                                <p className="text-xs text-muted-foreground line-clamp-2">
+                                  {task.description}
+                                </p>
+                              )}
+
+                              {/* Labels */}
+                              {task.labels && task.labels.length > 0 && (
+                                <div className="flex flex-wrap gap-1">
+                                  {task.labels.slice(0, 3).map((label, i) => {
+                                    const { color, text } = parseLabel(label);
+                                    return (
+                                      <Badge
+                                        key={i}
+                                        variant="outline"
+                                        className={cn(
+                                          'text-xs border',
+                                          labelColorMap[color] || labelColorMap.gray
+                                        )}
+                                      >
+                                        {text}
+                                      </Badge>
+                                    );
+                                  })}
+                                  {task.labels.length > 3 && (
+                                    <Badge variant="secondary" className="text-xs">
+                                      +{task.labels.length - 3}
+                                    </Badge>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* Footer */}
+                              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                <div className="flex items-center gap-2">
+                                  {task.dueDate && (
+                                    <div className="flex items-center gap-1">
+                                      <Calendar className="h-3 w-3" />
+                                      <span>{formatDate(task.dueDate)}</span>
+                                    </div>
+                                  )}
+                                  {task.estimatedHours && task.estimatedHours > 0 && (
+                                    <div className="flex items-center gap-1">
+                                      <Clock className="h-3 w-3" />
+                                      <span>{task.estimatedHours}h</span>
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div className="flex items-center gap-1">
+                                  {task.assigneeIds && task.assigneeIds.length > 0 && (
+                                    <Avatar className="h-5 w-5">
+                                      <AvatarFallback className="text-xs">
+                                        {task.assigneeIds.length > 1
+                                          ? `+${task.assigneeIds.length}`
+                                          : 'U'}
+                                      </AvatarFallback>
+                                    </Avatar>
+                                  )}
+                                </div>
                               </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      )}
-                    </Draggable>
-                  ))}
-                  {provided.placeholder}
+                            </CardContent>
+                          </Card>
+                        )}
+                      </Draggable>
+                    ))}
+                    {provided.placeholder}
 
-                  {/* Empty state */}
-                  {columnTasks.length === 0 && (
-                    <div className="flex items-center justify-center h-20 text-muted-foreground text-sm">
-                      No tasks
-                    </div>
-                  )}
-                </div>
-              )}
-            </Droppable>
-          </div>
-        );
+                    {/* Empty state */}
+                    {columnTasks.length === 0 && (
+                      <div className="flex items-center justify-center h-20 text-muted-foreground text-sm">
+                        No tasks
+                      </div>
+                    )}
+                  </div>
+                )}
+              </Droppable>
+            </div>
+          );
         })}
       </div>
     </DragDropContext>
