@@ -14,7 +14,13 @@ import { TaskBoard } from '@/components/task/task-board';
 import { CreateTaskDialog } from '@/components/task/create-task-dialog';
 import { TaskDetailsDialog } from '@/components/task/task-details-dialog';
 import { EditTaskDialog } from '@/components/task/edit-task-dialog';
-import { useTasks, useCreateTask, useUpdateTask, useUpdateTaskStatus, useDeleteTask } from '@/hooks/use-task';
+import {
+  useTasks,
+  useCreateTask,
+  useUpdateTask,
+  useUpdateTaskStatus,
+  useDeleteTask,
+} from '@/hooks/use-task';
 import { useProjects } from '@/hooks/use-project';
 import { useAuth } from '@/components/providers/auth-provider';
 import { useCurrentWorkspace } from '@/hooks/use-current-workspace';
@@ -22,14 +28,25 @@ import { useEpics } from '@/hooks/use-epic';
 import { useFunctionalRequirements } from '@/hooks/use-functional-requirement';
 import { Plus, Filter, Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import type { Task, TaskStatus } from '@/types';
+// import { useIsAdmin } from '@/hooks/use-admin';
 
 export default function TasksPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user } = useAuth();
+  // const { isAdmin } = useIsAdmin(user?.$id);
   const { currentWorkspace } = useCurrentWorkspace();
   const projectIdFromUrl = searchParams.get('projectId');
 
@@ -44,11 +61,17 @@ export default function TasksPage() {
   const { data: projects } = useProjects(currentWorkspace?.$id);
   const { data: tasks = [], isLoading: isLoadingTasks } = useTasks(selectedProjectId || undefined);
   const { data: epics = [] } = useEpics(selectedProjectId || undefined);
-  const { data: functionalRequirements = [] } = useFunctionalRequirements(selectedProjectId || undefined);
+  const { data: functionalRequirements = [] } = useFunctionalRequirements(
+    selectedProjectId || undefined
+  );
   const createTask = useCreateTask();
   const updateTask = useUpdateTask();
   const updateTaskStatus = useUpdateTaskStatus();
   const deleteTask = useDeleteTask();
+
+  // const canManageTasks = user?.role === 'MANAGER';
+
+  console.log(user?.role);
 
   // Restore project selection from localStorage or set from URL/first project
   React.useEffect(() => {
@@ -61,7 +84,7 @@ export default function TasksPage() {
     } else {
       const savedProjectId = localStorage.getItem(STORAGE_KEY);
 
-      if (savedProjectId && projects?.some(p => p.$id === savedProjectId)) {
+      if (savedProjectId && projects?.some((p) => p.$id === savedProjectId)) {
         // Restore saved project if it still exists
         setSelectedProjectId(savedProjectId);
       } else if (projects && projects.length > 0 && !selectedProjectId) {
@@ -74,15 +97,15 @@ export default function TasksPage() {
   }, [projects, projectIdFromUrl, selectedProjectId]);
 
   const selectedProject = React.useMemo(() => {
-    return projects?.find(p => p.$id === selectedProjectId);
+    return projects?.find((p) => p.$id === selectedProjectId);
   }, [projects, selectedProjectId]);
 
   // Extract all unique labels from existing tasks
   const existingLabels = React.useMemo(() => {
     const allLabels = new Set<string>();
-    tasks.forEach(task => {
+    tasks.forEach((task) => {
       if (task.labels && Array.isArray(task.labels)) {
-        task.labels.forEach(label => allLabels.add(label));
+        task.labels.forEach((label) => allLabels.add(label));
       }
     });
     return Array.from(allLabels);
@@ -91,7 +114,7 @@ export default function TasksPage() {
   // Filter tasks to show only those assigned to current user OR created by current user
   const myTasks = React.useMemo(() => {
     if (!user) return tasks;
-    return tasks.filter(task => {
+    return tasks.filter((task) => {
       const isAssignedToMe = task.assignedTo?.includes(user.$id) || false;
       const isCreatedByMe = task.createdBy === user.$id;
       return isAssignedToMe || isCreatedByMe;
@@ -102,7 +125,7 @@ export default function TasksPage() {
     if (!searchQuery) return myTasks;
     const query = searchQuery.toLowerCase();
     return myTasks.filter(
-      task =>
+      (task) =>
         task.title.toLowerCase().includes(query) ||
         task.hierarchyId.toLowerCase().includes(query) ||
         task.description?.toLowerCase().includes(query)
@@ -134,7 +157,10 @@ export default function TasksPage() {
       assignedByName: user.name, // ✅ Assigner's name
       dueDate: values.dueDate?.toISOString(),
       epicId: values.epicId && values.epicId !== 'none' ? values.epicId : undefined,
-      functionalRequirementId: values.functionalRequirementId && values.functionalRequirementId !== 'none' ? values.functionalRequirementId : undefined,
+      functionalRequirementId:
+        values.functionalRequirementId && values.functionalRequirementId !== 'none'
+          ? values.functionalRequirementId
+          : undefined,
       labels: values.labels || [],
       assigneeIds: values.assignedTo || [], // Map assignedTo from form to assigneeIds for mutation
     });
@@ -183,6 +209,8 @@ export default function TasksPage() {
         dueDate: values.dueDate?.toISOString(),
         epicId: values.epicId && values.epicId !== 'none' ? values.epicId : undefined,
         labels: values.labels || [],
+        assigneeIds: values.assigneeIds || [],
+        assignedTo: values.assigneeIds || [],
       },
     });
 
@@ -216,9 +244,7 @@ export default function TasksPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Button onClick={() => router.push('/onboarding')}>
-              Create Workspace
-            </Button>
+            <Button onClick={() => router.push('/onboarding')}>Create Workspace</Button>
           </CardContent>
         </Card>
       </div>
@@ -243,7 +269,7 @@ export default function TasksPage() {
               <SelectValue placeholder="Select a project" />
             </SelectTrigger>
             <SelectContent>
-              {projects?.map(project => (
+              {projects?.map((project) => (
                 <SelectItem key={project.$id} value={project.$id}>
                   <div className="flex items-center gap-2">
                     <span className="font-mono text-xs">{project.shortCode}</span>
@@ -296,6 +322,7 @@ export default function TasksPage() {
           <TaskBoard
             tasks={filteredTasks}
             projectId={selectedProjectId}
+            showMenu={true}
             onTaskMove={handleTaskMove}
             onTaskClick={handleTaskClick}
             onTaskEdit={handleTaskEdit}
@@ -343,6 +370,7 @@ export default function TasksPage() {
         isLoading={updateTask.isPending}
         existingLabels={existingLabels}
         epics={epics}
+        workspaceId={currentWorkspace.$id}
       />
 
       {/* Delete Confirmation */}

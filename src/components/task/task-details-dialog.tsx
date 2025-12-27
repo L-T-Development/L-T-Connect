@@ -1,12 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -87,16 +82,16 @@ export function TaskDetailsDialog({
 
   // Get assignee details
   const assignees = React.useMemo(() => {
-    if (!task?.assignedTo || !Array.isArray(task.assignedTo) || task.assignedTo.length === 0) {
+    if (!task?.assigneeIds || !Array.isArray(task.assigneeIds) || task.assigneeIds.length === 0) {
       return [];
     }
-    return teamMembers.filter(member => task.assignedTo?.includes(member.userId));
+    return teamMembers.filter((member) => task.assigneeIds?.includes(member.userId));
   }, [task, teamMembers]);
 
   const getInitials = (name: string) => {
     return name
       .split(' ')
-      .map(n => n[0])
+      .map((n) => n[0])
       .join('')
       .toUpperCase()
       .slice(0, 2);
@@ -137,11 +132,7 @@ export function TaskDetailsDialog({
             </div>
             <div className="flex gap-2">
               {onEdit && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => onEdit(task)}
-                >
+                <Button variant="outline" size="sm" onClick={() => onEdit(task)}>
                   <Edit className="h-4 w-4 mr-1" />
                   Edit
                 </Button>
@@ -181,9 +172,7 @@ export function TaskDetailsDialog({
                   <Calendar className="h-4 w-4" />
                   Due Date
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  {formatDate(task.dueDate)}
-                </p>
+                <p className="text-sm text-muted-foreground">{formatDate(task.dueDate)}</p>
               </div>
             )}
 
@@ -194,9 +183,7 @@ export function TaskDetailsDialog({
                   <Clock className="h-4 w-4" />
                   Estimated Hours
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  {task.estimatedHours}h
-                </p>
+                <p className="text-sm text-muted-foreground">{task.estimatedHours}h</p>
               </div>
             )}
 
@@ -206,9 +193,7 @@ export function TaskDetailsDialog({
                 <Calendar className="h-4 w-4" />
                 Created
               </div>
-              <p className="text-sm text-muted-foreground">
-                {formatDate(task.$createdAt)}
-              </p>
+              <p className="text-sm text-muted-foreground">{formatDate(task.$createdAt)}</p>
             </div>
 
             {/* Updated Date */}
@@ -217,9 +202,7 @@ export function TaskDetailsDialog({
                 <Calendar className="h-4 w-4" />
                 Last Updated
               </div>
-              <p className="text-sm text-muted-foreground">
-                {formatDate(task.$updatedAt)}
-              </p>
+              <p className="text-sm text-muted-foreground">{formatDate(task.$updatedAt)}</p>
             </div>
           </div>
 
@@ -239,10 +222,7 @@ export function TaskDetailsDialog({
                       <Badge
                         key={index}
                         variant="outline"
-                        className={cn(
-                          "border",
-                          labelColorMap[color] || labelColorMap.gray
-                        )}
+                        className={cn('border', labelColorMap[color] || labelColorMap.gray)}
                       >
                         {text}
                       </Badge>
@@ -264,7 +244,10 @@ export function TaskDetailsDialog({
                 </div>
                 <div className="space-y-2">
                   {assignees.map((member) => (
-                    <div key={member.userId} className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent">
+                    <div
+                      key={member.userId}
+                      className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent"
+                    >
                       <Avatar className="h-8 w-8">
                         <AvatarImage src={member.avatar} alt={member.name} />
                         <AvatarFallback className="text-xs">
@@ -297,53 +280,56 @@ export function TaskDetailsDialog({
           )}
 
           {/* Assigned By */}
-          {task.assignedBy && (() => {
-            // Find the assigner in team members
-            const assigner = teamMembers.find(member => member.userId === task.assignedBy);
+          {task.assignedBy &&
+            (() => {
+              // Find the assigner in team members
+              const assigner = teamMembers.find((member) => member.userId === task.assignedBy);
 
-            if (!assigner) {
-              // Fallback if assigner not found in team members
-              return task.assignedByName ? (
+              if (!assigner) {
+                // Fallback if assigner not found in team members
+                return task.assignedByName ? (
+                  <>
+                    <Separator />
+                    <div>
+                      <div className="flex items-center gap-2 text-sm font-medium mb-2">
+                        <User className="h-4 w-4" />
+                        Assigned By
+                      </div>
+                      <p className="text-sm text-muted-foreground">{task.assignedByName}</p>
+                    </div>
+                  </>
+                ) : null;
+              }
+
+              return (
                 <>
                   <Separator />
                   <div>
-                    <div className="flex items-center gap-2 text-sm font-medium mb-2">
+                    <div className="flex items-center gap-2 text-sm font-medium mb-3">
                       <User className="h-4 w-4" />
                       Assigned By
                     </div>
-                    <p className="text-sm text-muted-foreground">{task.assignedByName}</p>
+                    <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent">
+                      <Avatar className="h-8 w-8">
+                        <AvatarImage src={assigner.avatar} alt={assigner.name} />
+                        <AvatarFallback className="text-xs">
+                          {getInitials(assigner.name)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-sm">{assigner.name}</div>
+                        <div className="text-xs text-muted-foreground truncate">
+                          {assigner.email}
+                        </div>
+                      </div>
+                      <Badge variant="outline" className="text-xs shrink-0">
+                        {ROLE_CONFIG[assigner.role].label}
+                      </Badge>
+                    </div>
                   </div>
                 </>
-              ) : null;
-            }
-
-            return (
-              <>
-                <Separator />
-                <div>
-                  <div className="flex items-center gap-2 text-sm font-medium mb-3">
-                    <User className="h-4 w-4" />
-                    Assigned By
-                  </div>
-                  <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent">
-                    <Avatar className="h-8 w-8">
-                      <AvatarImage src={assigner.avatar} alt={assigner.name} />
-                      <AvatarFallback className="text-xs">
-                        {getInitials(assigner.name)}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-sm">{assigner.name}</div>
-                      <div className="text-xs text-muted-foreground truncate">{assigner.email}</div>
-                    </div>
-                    <Badge variant="outline" className="text-xs shrink-0">
-                      {ROLE_CONFIG[assigner.role].label}
-                    </Badge>
-                  </div>
-                </div>
-              </>
-            );
-          })()}
+              );
+            })()}
 
           {/* Parent Task */}
           {task.parentTaskId && (

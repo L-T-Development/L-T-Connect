@@ -36,11 +36,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const { DATABASE_ID, COLLECTIONS } = await import('@/lib/appwrite-config');
 
         // Try to find user in USERS collection by email
-        const usersResponse = await databases.listDocuments(
-          DATABASE_ID,
-          COLLECTIONS.USERS,
-          [Query.equal('email', currentUser.email)]
-        );
+        const usersResponse = await databases.listDocuments(DATABASE_ID, COLLECTIONS.USERS, [
+          Query.equal('email', currentUser.email),
+        ]);
 
         if (usersResponse.documents.length > 0) {
           // User exists in database
@@ -112,7 +110,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // Check app_users collection for admin status and temp password
       const { databases } = await import('@/lib/appwrite-client');
-      const APP_USERS_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_COLLECTION_APP_USERS_ID || 'app_users';
+      const APP_USERS_COLLECTION_ID =
+        process.env.NEXT_PUBLIC_APPWRITE_COLLECTION_APP_USERS_ID || 'app_users';
       const DATABASE_ID = process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!;
 
       try {
@@ -142,7 +141,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               return;
             } else {
               // Non-admin with no workspace - should not happen, but handle gracefully
-              throw new Error('Your account is not associated with any workspace. Please contact your administrator.');
+              throw new Error(
+                'Your account is not associated with any workspace. Please contact your administrator.'
+              );
             }
           }
 
@@ -179,7 +180,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const refreshUser = async () => {
     await loadUser();
   };
-
   return (
     <AuthContext.Provider value={{ user, session, loading, login, logout, refreshUser }}>
       {children}
