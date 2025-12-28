@@ -1,0 +1,16 @@
+name: CI - Interns Branch
+
+on:
+  push:
+    branches: [ interns ]
+  pull_request:
+    branches: [ interns ]
+
+jobs:
+  ci-interns:
+    uses: ./.github/workflows/reusable-template.yml
+    with:
+      branch_name: "interns"
+    secrets:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}

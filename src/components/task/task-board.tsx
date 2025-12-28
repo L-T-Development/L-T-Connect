@@ -16,13 +16,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useTasksRealtime } from '@/hooks/use-realtime';
 import type { Task, TaskStatus } from '@/types';
-import {
-  MoreVertical,
-  Clock,
-  AlertCircle,
-  Circle,
-  Calendar,
-} from 'lucide-react';
+import { MoreVertical, Clock, AlertCircle, Circle, Calendar } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 
 // Helper function to parse label format "color:text"
@@ -49,6 +43,10 @@ const labelColorMap: Record<string, string> = {
 interface TaskBoardProps {
   tasks: Task[];
   projectId?: string;
+  showMenu?: boolean;
+  sortCriteria?: Array<{ field: string; direction: 'asc' | 'desc' }>;
+  canEdit?: boolean; // Permission to edit tasks (managers/assistant managers)
+  canDelete?: boolean; // Permission to delete tasks (managers/assistant managers)
   onTaskMove: (taskId: string, newStatus: TaskStatus, newPosition: number) => void;
   onTaskClick: (task: Task) => void;
   onTaskEdit: (task: Task) => void;
@@ -63,16 +61,62 @@ const COLUMNS: { id: TaskStatus; title: string; color: string }[] = [
   { id: 'DONE', title: 'Done', color: 'bg-green-100 dark:bg-green-900' },
 ];
 
-const priorityConfig = {
-  CRITICAL: { label: 'Critical', color: 'destructive', icon: AlertCircle },
-  HIGH: { label: 'High', color: 'orange', icon: AlertCircle },
-  MEDIUM: { label: 'Medium', color: 'yellow', icon: Circle },
-  LOW: { label: 'Low', color: 'gray', icon: Circle },
+const priorityConfig: Record<
+  string,
+  {
+    label: string;
+    color: string;
+    icon: typeof AlertCircle;
+    borderColor: string;
+    dotColor: string;
+  }
+> = {
+  CRITICAL: {
+    label: 'Critical',
+    color: 'destructive',
+    icon: AlertCircle,
+    borderColor: 'border-l-red-500',
+    dotColor: 'bg-red-500',
+  },
+  HIGH: {
+    label: 'High',
+    color: 'orange',
+    icon: AlertCircle,
+    borderColor: 'border-l-orange-500',
+    dotColor: 'bg-orange-500',
+  },
+  MEDIUM: {
+    label: 'Medium',
+    color: 'yellow',
+    icon: Circle,
+    borderColor: 'border-l-yellow-500',
+    dotColor: 'bg-yellow-500',
+  },
+  LOW: {
+    label: 'Low',
+    color: 'gray',
+    icon: Circle,
+    borderColor: 'border-l-gray-400',
+    dotColor: 'bg-gray-400',
+  },
+};
+
+// Default priority config for unknown values
+const defaultPriorityConfig = {
+  label: 'Low',
+  color: 'gray',
+  icon: Circle,
+  borderColor: 'border-l-gray-400',
+  dotColor: 'bg-gray-400',
 };
 
 export function TaskBoard({
   tasks,
   projectId,
+  showMenu = false,
+  sortCriteria = [{ field: 'position', direction: 'asc' }],
+  canEdit = false,
+  canDelete = false,
   onTaskMove,
   onTaskClick,
   onTaskEdit,
@@ -80,6 +124,87 @@ export function TaskBoard({
 }: TaskBoardProps) {
   // Enable real-time updates for tasks
   useTasksRealtime(projectId);
+
+  // Priority order for sorting (higher number = higher priority)
+  const priorityOrder: Record<string, number> = React.useMemo(
+    () => ({
+      CRITICAL: 4,
+      HIGH: 3,
+      MEDIUM: 2,
+      LOW: 1,
+    }),
+    []
+  );
+
+  // Calculate urgency score based on due date
+  const getUrgencyScore = React.useCallback((task: Task): number => {
+    if (!task.dueDate) return 0;
+    const now = new Date();
+    const dueDate = new Date(task.dueDate);
+    const daysUntilDue = Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (daysUntilDue < 0) return 100;
+    if (daysUntilDue === 0) return 90;
+    if (daysUntilDue === 1) return 80;
+    if (daysUntilDue <= 3) return 70;
+    if (daysUntilDue <= 7) return 50;
+    return Math.max(1, 30 - daysUntilDue);
+  }, []);
+
+  // Compare by a single field
+  const compareByField = React.useCallback(
+    (a: Task, b: Task, field: string): number => {
+      switch (field) {
+        case 'priority':
+          return (priorityOrder[a.priority] || 0) - (priorityOrder[b.priority] || 0);
+        case 'urgency':
+          return getUrgencyScore(a) - getUrgencyScore(b);
+        case 'dueDate':
+          const dateA = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
+          const dateB = b.dueDate ? new Date(b.dueDate).getTime() : Infinity;
+          return dateA - dateB;
+        case 'title':
+          return a.title.localeCompare(b.title);
+        case 'hierarchyId':
+          return a.hierarchyId.localeCompare(b.hierarchyId);
+        case 'createdAt':
+          return new Date(a.$createdAt).getTime() - new Date(b.$createdAt).getTime();
+        case 'updatedAt':
+          return new Date(a.$updatedAt).getTime() - new Date(b.$updatedAt).getTime();
+        case 'labels':
+          return (a.labels?.length || 0) - (b.labels?.length || 0);
+        case 'estimatedHours':
+          return (a.estimatedHours || 0) - (b.estimatedHours || 0);
+        case 'position':
+        default:
+          return a.position - b.position;
+      }
+    },
+    [priorityOrder, getUrgencyScore]
+  );
+
+  // Sort tasks within each column using multi-field sorting
+  const sortTasksInColumn = React.useCallback(
+    (tasksToSort: Task[]): Task[] => {
+      if (
+        sortCriteria.length === 0 ||
+        (sortCriteria.length === 1 && sortCriteria[0].field === 'position')
+      ) {
+        return [...tasksToSort].sort((a, b) => a.position - b.position);
+      }
+
+      return [...tasksToSort].sort((a, b) => {
+        for (const criterion of sortCriteria) {
+          const comparison = compareByField(a, b, criterion.field);
+          if (comparison !== 0) {
+            return criterion.direction === 'asc' ? comparison : -comparison;
+          }
+        }
+        return 0;
+      });
+    },
+    [sortCriteria, compareByField]
+  );
 
   // Group tasks by status
   const tasksByStatus = React.useMemo(() => {
@@ -97,13 +222,13 @@ export function TaskBoard({
       }
     });
 
-    // Sort by position
+    // Sort each column based on sortField and sortDirection
     Object.keys(grouped).forEach((status) => {
-      grouped[status as TaskStatus].sort((a, b) => a.position - b.position);
+      grouped[status as TaskStatus] = sortTasksInColumn(grouped[status as TaskStatus]);
     });
 
     return grouped;
-  }, [tasks]);
+  }, [tasks, sortTasksInColumn]);
 
   const handleDragEnd = (result: DropResult) => {
     const { source, destination, draggableId } = result;
@@ -112,10 +237,7 @@ export function TaskBoard({
     if (!destination) return;
 
     // Dropped in same position
-    if (
-      source.droppableId === destination.droppableId &&
-      source.index === destination.index
-    ) {
+    if (source.droppableId === destination.droppableId && source.index === destination.index) {
       return;
     }
 
@@ -131,12 +253,9 @@ export function TaskBoard({
         {COLUMNS.map((column) => {
           const columnTasks = tasksByStatus[column.id];
           const hasItems = columnTasks.length > 0;
-          
+
           return (
-            <div
-              key={column.id}
-              className="flex flex-col min-h-[200px]"
-            >
+            <div key={column.id} className="flex flex-col min-h-[200px]">
               {/* Column Header */}
               <div className={cn('rounded-t-lg p-3 border-b', column.color)}>
                 <div className="flex items-center justify-between">
@@ -162,154 +281,177 @@ export function TaskBoard({
                     )}
                   >
                     {columnTasks.map((task, index) => (
-                    <Draggable
-                      key={task.$id}
-                      draggableId={task.$id}
-                      index={index}
-                    >
-                      {(provided, snapshot) => (
-                        <Card
-                          ref={provided.innerRef}
-                          {...provided.draggableProps}
-                          {...provided.dragHandleProps}
-                          className={cn(
-                            'cursor-pointer hover:shadow-lg transition-shadow',
-                            snapshot.isDragging && 'shadow-xl ring-2 ring-primary'
-                          )}
-                          onClick={() => onTaskClick(task)}
-                        >
-                          <CardHeader className="p-3 pb-2">
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="flex-1 space-y-1">
-                                <div className="flex items-center gap-2">
-                                  <Badge variant="outline" className="font-mono text-xs">
-                                    {task.hierarchyId}
-                                  </Badge>
-                                  <Badge
-                                    variant={
-                                      priorityConfig[task.priority].color as any
-                                    }
-                                    className="text-xs"
-                                  >
-                                    {priorityConfig[task.priority].label}
-                                  </Badge>
+                      <Draggable key={task.$id} draggableId={task.$id} index={index}>
+                        {(provided, snapshot) => (
+                          <Card
+                            ref={provided.innerRef}
+                            {...provided.draggableProps}
+                            {...provided.dragHandleProps}
+                            className={cn(
+                              'cursor-pointer hover:shadow-lg transition-shadow border-l-4',
+                              (priorityConfig[task.priority] || defaultPriorityConfig).borderColor,
+                              snapshot.isDragging && 'shadow-xl ring-2 ring-primary'
+                            )}
+                            onClick={() => onTaskClick(task)}
+                          >
+                            <CardHeader className="p-3 pb-2">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex-1 space-y-1">
+                                  <div className="flex items-center gap-2">
+                                    {/* <Badge variant="outline" className="font-mono text-xs">
+                                      {task.hierarchyId}
+                                    </Badge> */}
+                                    <div className="flex items-center gap-1.5">
+                                      <span
+                                        className={cn(
+                                          'h-2 w-2 rounded-full',
+                                          (priorityConfig[task.priority] || defaultPriorityConfig)
+                                            .dotColor
+                                        )}
+                                      />
+                                      <span className="text-xs text-muted-foreground font-medium">
+                                        {
+                                          (priorityConfig[task.priority] || defaultPriorityConfig)
+                                            .label
+                                        }
+                                      </span>
+                                    </div>
+                                  </div>
+                                  <h4 className="font-medium text-sm leading-tight line-clamp-2">
+                                    {task.title}
+                                  </h4>
                                 </div>
-                                <h4 className="font-medium text-sm leading-tight line-clamp-2">
-                                  {task.title}
-                                </h4>
-                              </div>
 
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                                  <Button variant="ghost" size="icon" className="h-6 w-6">
-                                    <MoreVertical className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      onTaskEdit(task);
-                                    }}
-                                  >
-                                    Edit Task
-                                  </DropdownMenuItem>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem
-                                    className="text-destructive"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      onTaskDelete(task.$id);
-                                    }}
-                                  >
-                                    Delete Task
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
-                          </CardHeader>
-
-                          <CardContent className="p-3 pt-0 space-y-2">
-                            {/* Description preview */}
-                            {task.description && (
-                              <p className="text-xs text-muted-foreground line-clamp-2">
-                                {task.description}
-                              </p>
-                            )}
-
-                            {/* Labels */}
-                            {task.labels && task.labels.length > 0 && (
-                              <div className="flex flex-wrap gap-1">
-                                {task.labels.slice(0, 3).map((label, i) => {
-                                  const { color, text } = parseLabel(label);
-                                  return (
-                                    <Badge 
-                                      key={i} 
-                                      variant="outline" 
-                                      className={cn(
-                                        "text-xs border",
-                                        labelColorMap[color] || labelColorMap.gray
-                                      )}
+                                {showMenu === true && (canEdit || canDelete) && (
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger
+                                      asChild
+                                      onClick={(e) => e.stopPropagation()}
                                     >
-                                      {text}
+                                      <Button variant="ghost" size="icon" className="h-6 w-6">
+                                        <MoreVertical className="h-4 w-4" />
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                      {canEdit && (
+                                        <DropdownMenuItem
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            onTaskEdit(task);
+                                          }}
+                                        >
+                                          Edit Task
+                                        </DropdownMenuItem>
+                                      )}
+                                      {canEdit && canDelete && <DropdownMenuSeparator />}
+                                      {canDelete && (
+                                        <DropdownMenuItem
+                                          className="text-destructive"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            onTaskDelete(task.$id);
+                                          }}
+                                        >
+                                          Delete Task
+                                        </DropdownMenuItem>
+                                      )}
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                )}
+                              </div>
+                            </CardHeader>
+
+                            <CardContent className="p-3 pt-0 space-y-2">
+                              {/* Description preview */}
+                              {task.description && (
+                                <p className="text-xs text-muted-foreground line-clamp-2">
+                                  {task.description}
+                                </p>
+                              )}
+
+                              {/* Labels */}
+                              {task.labels && task.labels.length > 0 && (
+                                <div className="flex flex-wrap gap-1">
+                                  {task.labels.slice(0, 3).map((label, i) => {
+                                    const { color, text } = parseLabel(label);
+                                    return (
+                                      <Badge
+                                        key={i}
+                                        variant="outline"
+                                        className={cn(
+                                          'text-xs border',
+                                          labelColorMap[color] || labelColorMap.gray
+                                        )}
+                                      >
+                                        {text}
+                                      </Badge>
+                                    );
+                                  })}
+                                  {task.labels.length > 3 && (
+                                    <Badge variant="secondary" className="text-xs">
+                                      +{task.labels.length - 3}
                                     </Badge>
-                                  );
-                                })}
-                                {task.labels.length > 3 && (
-                                  <Badge variant="secondary" className="text-xs">
-                                    +{task.labels.length - 3}
-                                  </Badge>
-                                )}
-                              </div>
-                            )}
+                                  )}
+                                </div>
+                              )}
 
-                            {/* Footer */}
-                            <div className="flex items-center justify-between text-xs text-muted-foreground">
-                              <div className="flex items-center gap-2">
-                                {task.dueDate && (
-                                  <div className="flex items-center gap-1">
-                                    <Calendar className="h-3 w-3" />
-                                    <span>{formatDate(task.dueDate)}</span>
-                                  </div>
-                                )}
-                                {task.estimatedHours && task.estimatedHours > 0 && (
-                                  <div className="flex items-center gap-1">
-                                    <Clock className="h-3 w-3" />
-                                    <span>{task.estimatedHours}h</span>
-                                  </div>
-                                )}
-                              </div>
+                              {/* Footer */}
+                              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                <div className="flex items-center gap-2">
+                                  {task.dueDate && (
+                                    <div className="flex items-center gap-1">
+                                      <Calendar className="h-3 w-3" />
+                                      <span>{formatDate(task.dueDate)}</span>
+                                    </div>
+                                  )}
+                                  {task.estimatedHours && task.estimatedHours > 0 && (
+                                    <div className="flex items-center gap-1">
+                                      <Clock className="h-3 w-3" />
+                                      <span>{task.estimatedHours}h</span>
+                                    </div>
+                                  )}
+                                </div>
 
-                              <div className="flex items-center gap-1">
-                                {task.assigneeIds && task.assigneeIds.length > 0 && (
-                                  <Avatar className="h-5 w-5">
-                                    <AvatarFallback className="text-xs">
-                                      {task.assigneeIds.length > 1
-                                        ? `+${task.assigneeIds.length}`
-                                        : 'U'}
-                                    </AvatarFallback>
-                                  </Avatar>
-                                )}
+                                <div className="flex items-center gap-1">
+                                  {/* Check both assignedTo and assigneeIds for backward compatibility */}
+                                  {((task.assignedTo && task.assignedTo.length > 0) ||
+                                    (task.assigneeIds && task.assigneeIds.length > 0)) && (
+                                    <Avatar className="h-5 w-5">
+                                      <AvatarFallback className="text-xs bg-primary/10 text-primary">
+                                        {task.assignedToNames && task.assignedToNames.length > 0
+                                          ? task.assignedToNames[0]
+                                              .split(' ')
+                                              .map((n) => n[0])
+                                              .join('')
+                                              .toUpperCase()
+                                              .slice(0, 2)
+                                          : (task.assignedTo?.length || task.assigneeIds?.length) >
+                                              1
+                                            ? `+${task.assignedTo?.length || task.assigneeIds?.length}`
+                                            : 'U'}
+                                      </AvatarFallback>
+                                    </Avatar>
+                                  )}
+                                </div>
                               </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      )}
-                    </Draggable>
-                  ))}
-                  {provided.placeholder}
+                            </CardContent>
+                          </Card>
+                        )}
+                      </Draggable>
+                    ))}
+                    {provided.placeholder}
 
-                  {/* Empty state */}
-                  {columnTasks.length === 0 && (
-                    <div className="flex items-center justify-center h-20 text-muted-foreground text-sm">
-                      No tasks
-                    </div>
-                  )}
-                </div>
-              )}
-            </Droppable>
-          </div>
-        );
+                    {/* Empty state */}
+                    {columnTasks.length === 0 && (
+                      <div className="flex items-center justify-center h-20 text-muted-foreground text-sm">
+                        No tasks
+                      </div>
+                    )}
+                  </div>
+                )}
+              </Droppable>
+            </div>
+          );
         })}
       </div>
     </DragDropContext>
