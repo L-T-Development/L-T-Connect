@@ -103,7 +103,7 @@ const priorityConfig: Record<
 
 // Default priority config for unknown values
 const defaultPriorityConfig = {
-  label: 'Unknown',
+  label: 'Low',
   color: 'gray',
   icon: Circle,
   borderColor: 'border-l-gray-400',
@@ -413,12 +413,22 @@ export function TaskBoard({
                                 </div>
 
                                 <div className="flex items-center gap-1">
-                                  {task.assigneeIds && task.assigneeIds.length > 0 && (
+                                  {/* Check both assignedTo and assigneeIds for backward compatibility */}
+                                  {((task.assignedTo && task.assignedTo.length > 0) ||
+                                    (task.assigneeIds && task.assigneeIds.length > 0)) && (
                                     <Avatar className="h-5 w-5">
-                                      <AvatarFallback className="text-xs">
-                                        {task.assigneeIds.length > 1
-                                          ? `+${task.assigneeIds.length}`
-                                          : 'U'}
+                                      <AvatarFallback className="text-xs bg-primary/10 text-primary">
+                                        {task.assignedToNames && task.assignedToNames.length > 0
+                                          ? task.assignedToNames[0]
+                                              .split(' ')
+                                              .map((n) => n[0])
+                                              .join('')
+                                              .toUpperCase()
+                                              .slice(0, 2)
+                                          : (task.assignedTo?.length || task.assigneeIds?.length) >
+                                              1
+                                            ? `+${task.assignedTo?.length || task.assigneeIds?.length}`
+                                            : 'U'}
                                       </AvatarFallback>
                                     </Avatar>
                                   )}

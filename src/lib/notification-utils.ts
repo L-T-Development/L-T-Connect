@@ -18,6 +18,10 @@ export const NOTIFICATION_TYPES = {
   TASK_DUE_SOON: 'TASK_DUE_SOON',
   TASK_OVERDUE: 'TASK_OVERDUE',
   TASK_DEADLINE_REMINDER: 'TASK_DEADLINE_REMINDER',
+  TASK_REVIEW_REQUESTED: 'TASK_REVIEW_REQUESTED',
+
+  // Sprint Notifications
+  SPRINT_READY_TO_CLOSE: 'SPRINT_READY_TO_CLOSE',
 
   // Requirement Notifications
   REQUIREMENT_CREATED: 'REQUIREMENT_CREATED',
@@ -124,7 +128,6 @@ interface NotificationTemplate {
   priority: NotificationPriority;
   category: NotificationCategory;
   requiresEmail: boolean;
-  actionUrl?: (data: any) => string;
 }
 
 export const NOTIFICATION_TEMPLATES: Record<string, NotificationTemplate> = {
@@ -135,7 +138,6 @@ export const NOTIFICATION_TEMPLATES: Record<string, NotificationTemplate> = {
     priority: NotificationPriority.HIGH,
     category: NotificationCategory.TASK,
     requiresEmail: true,
-    actionUrl: (data) => `/projects/${data.projectId}?task=${data.taskId}`,
   },
 
   TASK_CREATED: {
@@ -145,7 +147,6 @@ export const NOTIFICATION_TEMPLATES: Record<string, NotificationTemplate> = {
     priority: NotificationPriority.MEDIUM,
     category: NotificationCategory.TASK,
     requiresEmail: false,
-    actionUrl: (data) => `/projects/${data.projectId}?task=${data.taskId}`,
   },
 
   TASK_UPDATED: {
@@ -154,7 +155,6 @@ export const NOTIFICATION_TEMPLATES: Record<string, NotificationTemplate> = {
     priority: NotificationPriority.MEDIUM,
     category: NotificationCategory.TASK,
     requiresEmail: false,
-    actionUrl: (data) => `/projects/${data.projectId}?task=${data.taskId}`,
   },
 
   TASK_COMPLETED: {
@@ -163,7 +163,6 @@ export const NOTIFICATION_TEMPLATES: Record<string, NotificationTemplate> = {
     priority: NotificationPriority.MEDIUM,
     category: NotificationCategory.TASK,
     requiresEmail: false,
-    actionUrl: (data) => `/projects/${data.projectId}?task=${data.taskId}`,
   },
 
   TASK_STATUS_CHANGED: {
@@ -172,7 +171,6 @@ export const NOTIFICATION_TEMPLATES: Record<string, NotificationTemplate> = {
     priority: NotificationPriority.MEDIUM,
     category: NotificationCategory.TASK,
     requiresEmail: false,
-    actionUrl: (data) => `/projects/${data.projectId}?task=${data.taskId}`,
   },
 
   TASK_DUE_SOON: {
@@ -181,7 +179,6 @@ export const NOTIFICATION_TEMPLATES: Record<string, NotificationTemplate> = {
     priority: NotificationPriority.HIGH,
     category: NotificationCategory.TASK,
     requiresEmail: true,
-    actionUrl: (data) => `/projects/${data.projectId}?task=${data.taskId}`,
   },
 
   TASK_OVERDUE: {
@@ -190,7 +187,6 @@ export const NOTIFICATION_TEMPLATES: Record<string, NotificationTemplate> = {
     priority: NotificationPriority.URGENT,
     category: NotificationCategory.TASK,
     requiresEmail: true,
-    actionUrl: (data) => `/projects/${data.projectId}?task=${data.taskId}`,
   },
 
   TASK_DEADLINE_REMINDER: {
@@ -200,7 +196,33 @@ export const NOTIFICATION_TEMPLATES: Record<string, NotificationTemplate> = {
     priority: NotificationPriority.HIGH,
     category: NotificationCategory.TASK,
     requiresEmail: true,
-    actionUrl: (data) => `/projects/${data.projectId}?task=${data.taskId}`,
+  },
+
+  TASK_REVIEW_REQUESTED: {
+    title: (data) => `Task Ready for Review: ${data.taskTitle}`,
+    message: (data) =>
+      `${data.submitterName} has submitted "${data.taskTitle}" (${data.taskHierarchyId}) for review in ${data.projectName}`,
+    priority: NotificationPriority.HIGH,
+    category: NotificationCategory.TASK,
+    requiresEmail: true,
+  },
+
+  TASK_REVIEWED_DONE: {
+    title: (data) => `Task Approved: ${data.taskTitle}`,
+    message: (data) =>
+      `Your task "${data.taskTitle}" (${data.taskHierarchyId}) has been reviewed and marked as done by ${data.reviewerName}`,
+    priority: NotificationPriority.MEDIUM,
+    category: NotificationCategory.TASK,
+    requiresEmail: true,
+  },
+
+  SPRINT_READY_TO_CLOSE: {
+    title: (data) => `Sprint Ready to Close: ${data.sprintName}`,
+    message: (data) =>
+      `All tasks in "${data.sprintName}" are complete. The sprint is ready to be closed.`,
+    priority: NotificationPriority.HIGH,
+    category: NotificationCategory.SPRINT,
+    requiresEmail: true,
   },
 
   // Requirement Notifications
@@ -211,7 +233,6 @@ export const NOTIFICATION_TEMPLATES: Record<string, NotificationTemplate> = {
     priority: NotificationPriority.MEDIUM,
     category: NotificationCategory.TASK,
     requiresEmail: false,
-    actionUrl: (data) => `/projects/${data.projectId}/requirements`,
   },
 
   REQUIREMENT_UPDATED: {
@@ -220,7 +241,6 @@ export const NOTIFICATION_TEMPLATES: Record<string, NotificationTemplate> = {
     priority: NotificationPriority.LOW,
     category: NotificationCategory.TASK,
     requiresEmail: false,
-    actionUrl: (data) => `/projects/${data.projectId}/requirements`,
   },
 
   // Epic Notifications
@@ -231,7 +251,6 @@ export const NOTIFICATION_TEMPLATES: Record<string, NotificationTemplate> = {
     priority: NotificationPriority.MEDIUM,
     category: NotificationCategory.TASK,
     requiresEmail: false,
-    actionUrl: (data) => `/epics/${data.epicId}`,
   },
 
   EPIC_UPDATED: {
@@ -240,7 +259,6 @@ export const NOTIFICATION_TEMPLATES: Record<string, NotificationTemplate> = {
     priority: NotificationPriority.LOW,
     category: NotificationCategory.TASK,
     requiresEmail: false,
-    actionUrl: (data) => `/epics/${data.epicId}`,
   },
 
   EPIC_COMPLETED: {
@@ -249,7 +267,6 @@ export const NOTIFICATION_TEMPLATES: Record<string, NotificationTemplate> = {
     priority: NotificationPriority.MEDIUM,
     category: NotificationCategory.TASK,
     requiresEmail: true,
-    actionUrl: (data) => `/epics/${data.epicId}`,
   },
 
   // Functional Requirement Notifications
@@ -260,7 +277,6 @@ export const NOTIFICATION_TEMPLATES: Record<string, NotificationTemplate> = {
     priority: NotificationPriority.MEDIUM,
     category: NotificationCategory.TASK,
     requiresEmail: false,
-    actionUrl: (data) => `/projects/${data.projectId}/requirements?fr=${data.frId}`,
   },
 
   FR_ASSIGNED: {
@@ -270,7 +286,6 @@ export const NOTIFICATION_TEMPLATES: Record<string, NotificationTemplate> = {
     priority: NotificationPriority.HIGH,
     category: NotificationCategory.TASK,
     requiresEmail: true,
-    actionUrl: (data) => `/projects/${data.projectId}/requirements?fr=${data.frId}`,
   },
 
   FR_UPDATED: {
@@ -279,7 +294,6 @@ export const NOTIFICATION_TEMPLATES: Record<string, NotificationTemplate> = {
     priority: NotificationPriority.LOW,
     category: NotificationCategory.TASK,
     requiresEmail: false,
-    actionUrl: (data) => `/projects/${data.projectId}/requirements?fr=${data.frId}`,
   },
 
   FR_STATUS_CHANGED: {
@@ -288,7 +302,6 @@ export const NOTIFICATION_TEMPLATES: Record<string, NotificationTemplate> = {
     priority: NotificationPriority.MEDIUM,
     category: NotificationCategory.TASK,
     requiresEmail: false,
-    actionUrl: (data) => `/projects/${data.projectId}/requirements?fr=${data.frId}`,
   },
 
   // Sprint Notifications
@@ -298,7 +311,6 @@ export const NOTIFICATION_TEMPLATES: Record<string, NotificationTemplate> = {
     priority: NotificationPriority.HIGH,
     category: NotificationCategory.SPRINT,
     requiresEmail: true,
-    actionUrl: (data) => `/sprints/${data.sprintId}/board`,
   },
 
   SPRINT_ENDING_SOON: {
@@ -308,7 +320,6 @@ export const NOTIFICATION_TEMPLATES: Record<string, NotificationTemplate> = {
     priority: NotificationPriority.HIGH,
     category: NotificationCategory.SPRINT,
     requiresEmail: true,
-    actionUrl: (data) => `/sprints/${data.sprintId}/board`,
   },
 
   SPRINT_COMPLETED: {
@@ -318,7 +329,6 @@ export const NOTIFICATION_TEMPLATES: Record<string, NotificationTemplate> = {
     priority: NotificationPriority.MEDIUM,
     category: NotificationCategory.SPRINT,
     requiresEmail: true,
-    actionUrl: (data) => `/sprints/${data.sprintId}/analytics`,
   },
 
   // Leave Notifications
@@ -329,7 +339,6 @@ export const NOTIFICATION_TEMPLATES: Record<string, NotificationTemplate> = {
     priority: NotificationPriority.HIGH,
     category: NotificationCategory.LEAVE,
     requiresEmail: true,
-    actionUrl: (data) => `/leave?tab=team&request=${data.leaveId}`,
   },
 
   LEAVE_APPROVED: {
@@ -339,7 +348,6 @@ export const NOTIFICATION_TEMPLATES: Record<string, NotificationTemplate> = {
     priority: NotificationPriority.HIGH,
     category: NotificationCategory.LEAVE,
     requiresEmail: true,
-    actionUrl: () => `/leave`,
   },
 
   LEAVE_REJECTED: {
@@ -349,7 +357,6 @@ export const NOTIFICATION_TEMPLATES: Record<string, NotificationTemplate> = {
     priority: NotificationPriority.HIGH,
     category: NotificationCategory.LEAVE,
     requiresEmail: true,
-    actionUrl: () => `/leave`,
   },
 
   LEAVE_CANCELLED: {
@@ -358,7 +365,6 @@ export const NOTIFICATION_TEMPLATES: Record<string, NotificationTemplate> = {
     priority: NotificationPriority.MEDIUM,
     category: NotificationCategory.LEAVE,
     requiresEmail: false,
-    actionUrl: () => `/leave?tab=team`,
   },
 
   // Attendance Notifications
@@ -369,7 +375,6 @@ export const NOTIFICATION_TEMPLATES: Record<string, NotificationTemplate> = {
     priority: NotificationPriority.MEDIUM,
     category: NotificationCategory.ATTENDANCE,
     requiresEmail: false,
-    actionUrl: () => `/attendance`,
   },
 
   ATTENDANCE_MISSED: {
@@ -378,7 +383,6 @@ export const NOTIFICATION_TEMPLATES: Record<string, NotificationTemplate> = {
     priority: NotificationPriority.HIGH,
     category: NotificationCategory.ATTENDANCE,
     requiresEmail: true,
-    actionUrl: () => `/attendance`,
   },
 
   ATTENDANCE_REMINDER: {
@@ -387,7 +391,6 @@ export const NOTIFICATION_TEMPLATES: Record<string, NotificationTemplate> = {
     priority: NotificationPriority.LOW,
     category: NotificationCategory.ATTENDANCE,
     requiresEmail: false,
-    actionUrl: () => `/attendance`,
   },
 
   ATTENDANCE_CHECKOUT_REMINDER: {
@@ -396,7 +399,6 @@ export const NOTIFICATION_TEMPLATES: Record<string, NotificationTemplate> = {
     priority: NotificationPriority.LOW,
     category: NotificationCategory.ATTENDANCE,
     requiresEmail: false,
-    actionUrl: () => `/attendance`,
   },
 
   // Comment Notifications
@@ -406,8 +408,6 @@ export const NOTIFICATION_TEMPLATES: Record<string, NotificationTemplate> = {
     priority: NotificationPriority.MEDIUM,
     category: NotificationCategory.COMMENT,
     requiresEmail: true,
-    actionUrl: (data) =>
-      `/projects/${data.projectId}?task=${data.taskId}&comment=${data.commentId}`,
   },
 
   COMMENT_REPLY: {
@@ -416,8 +416,6 @@ export const NOTIFICATION_TEMPLATES: Record<string, NotificationTemplate> = {
     priority: NotificationPriority.MEDIUM,
     category: NotificationCategory.COMMENT,
     requiresEmail: false,
-    actionUrl: (data) =>
-      `/projects/${data.projectId}?task=${data.taskId}&comment=${data.commentId}`,
   },
 
   COMMENT_ON_TASK: {
@@ -426,8 +424,6 @@ export const NOTIFICATION_TEMPLATES: Record<string, NotificationTemplate> = {
     priority: NotificationPriority.LOW,
     category: NotificationCategory.COMMENT,
     requiresEmail: false,
-    actionUrl: (data) =>
-      `/projects/${data.projectId}?task=${data.taskId}&comment=${data.commentId}`,
   },
 
   // Team Notifications
@@ -437,7 +433,6 @@ export const NOTIFICATION_TEMPLATES: Record<string, NotificationTemplate> = {
     priority: NotificationPriority.HIGH,
     category: NotificationCategory.TEAM,
     requiresEmail: true,
-    actionUrl: (data) => `/projects/${data.projectId}`,
   },
 
   PROJECT_INVITATION: {
@@ -446,7 +441,6 @@ export const NOTIFICATION_TEMPLATES: Record<string, NotificationTemplate> = {
     priority: NotificationPriority.HIGH,
     category: NotificationCategory.TEAM,
     requiresEmail: true,
-    actionUrl: (data) => `/projects/${data.projectId}`,
   },
 };
 
@@ -466,7 +460,6 @@ export function generateNotification(
   priority: NotificationPriority;
   category: NotificationCategory;
   requiresEmail: boolean;
-  actionUrl?: string;
 } | null {
   const template = NOTIFICATION_TEMPLATES[type];
 
@@ -481,7 +474,6 @@ export function generateNotification(
     priority: template.priority,
     category: template.category,
     requiresEmail: template.requiresEmail,
-    actionUrl: template.actionUrl ? template.actionUrl(data) : undefined,
   };
 }
 

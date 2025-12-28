@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { databases } from '@/lib/appwrite-client';
 import { Query, ID } from 'appwrite';
 import type { Task, TaskStatus, TaskPriority, FunctionalRequirement } from '@/types';
-import { toast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import { createBulkNotifications } from '@/hooks/use-notification';
 import { generateTaskId, generateTaskIdWithoutFR } from '@/lib/hierarchy-id-generator';
 
@@ -460,18 +460,12 @@ export function useCreateTask() {
         }
       }
 
-      toast({
-        title: 'Success',
-        description: 'Task created successfully!',
-      });
+      toast.success('Task created successfully!');
     },
     onError: (error: Error) => {
-      toast({
-        title: 'Error',
-        description:
-          (error instanceof Error ? error.message : String(error)) || 'Failed to create task',
-        variant: 'destructive',
-      });
+      toast.error(
+        (error instanceof Error ? error.message : String(error)) || 'Failed to create task'
+      );
     },
   });
 }
@@ -480,8 +474,35 @@ export function useUpdateTask() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (data: { taskId: string; projectId: string; updates: Partial<Task> }) => {
-      const { taskId, updates } = data;
+    mutationFn: async (data: {
+      taskId: string;
+      projectId: string;
+      updates: Partial<Task>;
+      currentUserRole?: string; // ✅ Pass user role for permission check
+    }) => {
+      const { taskId, updates, currentUserRole } = data;
+
+      // ✅ Check permission for status changes to DONE
+      if (updates.status === 'DONE') {
+        // Get current task to check its status
+        const currentTask = await databases.getDocument(DATABASE_ID, TASKS_COLLECTION_ID, taskId);
+
+        // ✅ ENFORCE: Tasks must be in REVIEW before marking as DONE
+        if (currentTask.status !== 'REVIEW') {
+          toast.warning(
+            'Tasks must be reviewed before marking as done. Please move to Review first.'
+          );
+          return currentTask as unknown as Task; // Return unchanged task
+        }
+
+        // ✅ ENFORCE: Only managers/assistant managers can mark tasks as DONE
+        const role = currentUserRole?.toLowerCase() || '';
+        const canMarkDone = role.includes('manager') || role.includes('admin') || role === 'owner';
+        if (!canMarkDone) {
+          toast.warning('Only managers or assistant managers can mark tasks as done.');
+          return currentTask as unknown as Task; // Return unchanged task
+        }
+      }
 
       // Stringify complex fields if they exist in updates
       const processedUpdates: any = { ...updates };
@@ -547,12 +568,9 @@ export function useUpdateTask() {
       if (context?.previousTasks) {
         queryClient.setQueryData(['tasks', variables.projectId], context.previousTasks);
       }
-      toast({
-        title: 'Error',
-        description:
-          (error instanceof Error ? error.message : String(error)) || 'Failed to update task',
-        variant: 'destructive',
-      });
+      toast.error(
+        (error instanceof Error ? error.message : String(error)) || 'Failed to update task'
+      );
     },
     onSuccess: async (updatedTask, variables) => {
       queryClient.invalidateQueries({ queryKey: ['task', variables.taskId] });
@@ -714,10 +732,7 @@ export function useUpdateTask() {
         }
       }
 
-      toast({
-        title: 'Success',
-        description: 'Task updated successfully!',
-      });
+      toast.success('Task updated successfully!');
     },
   });
 }
@@ -731,8 +746,30 @@ export function useUpdateTaskStatus() {
       projectId: string;
       status: TaskStatus;
       position: number;
+      currentUserRole?: string; // ✅ Pass user role for permission check
     }) => {
-      const { taskId, status, position } = data;
+      const { taskId, status, position, currentUserRole } = data;
+
+      // ✅ Get current task to check its status
+      const currentTask = await databases.getDocument(DATABASE_ID, TASKS_COLLECTION_ID, taskId);
+
+      // ✅ ENFORCE: Tasks must be in REVIEW before marking as DONE
+      if (status === 'DONE' && currentTask.status !== 'REVIEW') {
+        toast.warning(
+          'Tasks must be reviewed before marking as done. Please move to Review first.'
+        );
+        return currentTask as unknown as Task; // Return unchanged task
+      }
+
+      // ✅ ENFORCE: Only managers/assistant managers can mark tasks as DONE
+      if (status === 'DONE') {
+        const role = currentUserRole?.toLowerCase() || '';
+        const canMarkDone = role.includes('manager') || role.includes('admin') || role === 'owner';
+        if (!canMarkDone) {
+          toast.warning('Only managers or assistant managers can mark tasks as done.');
+          return currentTask as unknown as Task; // Return unchanged task
+        }
+      }
 
       const response = await databases.updateDocument(DATABASE_ID, TASKS_COLLECTION_ID, taskId, {
         status,
@@ -765,17 +802,13 @@ export function useUpdateTaskStatus() {
       if (context?.previousTasks) {
         queryClient.setQueryData(['tasks', variables.projectId], context.previousTasks);
       }
-      toast({
-        title: 'Error',
-        description:
-          (error instanceof Error ? error.message : String(error)) ||
-          'Failed to update task status',
-        variant: 'destructive',
-      });
+      toast.error(
+        (error instanceof Error ? error.message : String(error)) || 'Failed to update task status'
+      );
     },
     onSuccess: async (updatedTask, variables) => {
       console.log('useUpdateTaskStatus onSuccess - updatedTask:', updatedTask);
-      
+
       // Silent success, already updated optimistically
       queryClient.invalidateQueries({ queryKey: ['tasks', variables.projectId] });
 
@@ -836,14 +869,141 @@ export function useUpdateTaskStatus() {
               },
             });
           }
+
+          // ✅ Notify assignees that their task has been reviewed and marked as done
+          const assigneesData = updatedTask.assigneeIds || updatedTask.assignedTo || [];
+          const assignees = Array.isArray(assigneesData)
+            ? assigneesData
+            : typeof assigneesData === 'string'
+              ? JSON.parse(assigneesData)
+              : [];
+          const validAssignees = assignees.filter(
+            (id: string) => id && typeof id === 'string' && id.trim() !== ''
+          );
+
+          if (validAssignees.length > 0) {
+            // Find the reviewer name (manager who marked it done)
+            const currentUserId = variables.currentUserRole ? undefined : undefined; // We don't have the user ID directly
+
+            await createBulkNotifications({
+              workspaceId: updatedTask.workspaceId || '',
+              userIds: validAssignees,
+              type: 'TASK_REVIEWED_DONE',
+              data: {
+                taskId: updatedTask.$id,
+                taskTitle: updatedTask.title,
+                taskHierarchyId: updatedTask.hierarchyId,
+                projectId: updatedTask.projectId,
+                projectName: projectName,
+                reviewerName: 'Manager', // Could be enhanced to pass actual reviewer name
+                entityType: 'TASK',
+              },
+            });
+          }
         } catch (error) {
           // Don't fail status update if notification fails
           console.error('Failed to send completion notifications:', error);
         }
       }
 
-      // Create notification for status changes (except to DONE, already handled)
-      if (variables.status !== 'DONE') {
+      // ✅ Notify managers when task moves to REVIEW
+      if (variables.status === 'REVIEW') {
+        try {
+          const WORKSPACE_MEMBERS_COLLECTION_ID =
+            process.env.NEXT_PUBLIC_APPWRITE_COLLECTION_WORKSPACE_MEMBERS_ID!;
+          const membersResponse = await databases.listDocuments(
+            DATABASE_ID,
+            WORKSPACE_MEMBERS_COLLECTION_ID,
+            [Query.equal('workspaceId', updatedTask.workspaceId)]
+          );
+
+          // Filter for managers and assistant managers
+          const managers = membersResponse.documents
+            .filter((member: any) => {
+              const role = member.role?.toLowerCase() || '';
+              return role.includes('manager') || role.includes('admin') || role === 'owner';
+            })
+            .map((member: any) => member.userId)
+            .filter((userId: string) => userId && userId.trim());
+
+          if (managers.length > 0) {
+            await createBulkNotifications({
+              workspaceId: updatedTask.workspaceId || '',
+              userIds: managers,
+              type: 'TASK_REVIEW_REQUESTED',
+              data: {
+                taskId: updatedTask.$id,
+                taskTitle: updatedTask.title,
+                taskHierarchyId: updatedTask.hierarchyId,
+                projectId: updatedTask.projectId,
+                projectName: projectName,
+                submitterName: updatedTask.createdByName || 'Team Member',
+                entityType: 'TASK',
+              },
+            });
+          }
+        } catch (error) {
+          console.error('Failed to send review notification:', error);
+        }
+      }
+
+      // ✅ Check if all sprint tasks are complete - notify managers to close sprint
+      if (variables.status === 'DONE' && updatedTask.sprintId) {
+        try {
+          const sprintTasks = await databases.listDocuments(DATABASE_ID, TASKS_COLLECTION_ID, [
+            Query.equal('sprintId', updatedTask.sprintId),
+            Query.limit(500),
+          ]);
+
+          const allTasksDone = sprintTasks.documents.every((t: any) => t.status === 'DONE');
+
+          if (allTasksDone && sprintTasks.total > 0) {
+            const WORKSPACE_MEMBERS_COLLECTION_ID =
+              process.env.NEXT_PUBLIC_APPWRITE_COLLECTION_WORKSPACE_MEMBERS_ID!;
+            const membersResponse = await databases.listDocuments(
+              DATABASE_ID,
+              WORKSPACE_MEMBERS_COLLECTION_ID,
+              [Query.equal('workspaceId', updatedTask.workspaceId)]
+            );
+
+            const managers = membersResponse.documents
+              .filter((member: any) => {
+                const role = member.role?.toLowerCase() || '';
+                return role.includes('manager') || role.includes('admin') || role === 'owner';
+              })
+              .map((member: any) => member.userId)
+              .filter((userId: string) => userId && userId.trim());
+
+            if (managers.length > 0) {
+              // Get sprint name
+              const sprint = await databases.getDocument(
+                DATABASE_ID,
+                SPRINTS_COLLECTION_ID,
+                updatedTask.sprintId
+              );
+
+              await createBulkNotifications({
+                workspaceId: updatedTask.workspaceId || '',
+                userIds: managers,
+                type: 'SPRINT_READY_TO_CLOSE',
+                data: {
+                  sprintId: updatedTask.sprintId,
+                  sprintName: sprint.name,
+                  totalTasks: sprintTasks.total,
+                  projectId: updatedTask.projectId,
+                  projectName: projectName,
+                  entityType: 'SPRINT',
+                },
+              });
+            }
+          }
+        } catch (error) {
+          console.error('Failed to check sprint completion:', error);
+        }
+      }
+
+      // Create notification for status changes (except to DONE and REVIEW, already handled)
+      if (variables.status !== 'DONE' && variables.status !== 'REVIEW') {
         // Ensure assignees is always an array
         const assigneesData = updatedTask.assigneeIds || [];
         const assignees = Array.isArray(assigneesData)
@@ -887,18 +1047,12 @@ export function useDeleteTask() {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['tasks', data.projectId] });
-      toast({
-        title: 'Success',
-        description: 'Task deleted successfully!',
-      });
+      toast.success('Task deleted successfully!');
     },
     onError: (error: Error) => {
-      toast({
-        title: 'Error',
-        description:
-          (error instanceof Error ? error.message : String(error)) || 'Failed to delete task',
-        variant: 'destructive',
-      });
+      toast.error(
+        (error instanceof Error ? error.message : String(error)) || 'Failed to delete task'
+      );
     },
   });
 }
@@ -925,12 +1079,9 @@ export function useReorderTasks() {
       queryClient.invalidateQueries({ queryKey: ['tasks', data.projectId] });
     },
     onError: (error: Error) => {
-      toast({
-        title: 'Error',
-        description:
-          (error instanceof Error ? error.message : String(error)) || 'Failed to reorder tasks',
-        variant: 'destructive',
-      });
+      toast.error(
+        (error instanceof Error ? error.message : String(error)) || 'Failed to reorder tasks'
+      );
     },
   });
 }
@@ -1025,17 +1176,10 @@ export function useAddTaskDependency() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['workspace-tasks'] });
-      toast({
-        title: 'Dependency added',
-        description: 'Task dependency has been created successfully.',
-      });
+      toast.success('Task dependency has been created successfully.');
     },
     onError: (error: Error) => {
-      toast({
-        title: 'Dependencies disabled',
-        description: error instanceof Error ? error.message : String(error),
-        variant: 'destructive',
-      });
+      toast.error(error instanceof Error ? error.message : String(error));
     },
   });
 }
@@ -1121,17 +1265,10 @@ export function useRemoveTaskDependency() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['workspace-tasks'] });
-      toast({
-        title: 'Dependency removed',
-        description: 'Task dependency has been removed successfully.',
-      });
+      toast.success('Task dependency has been removed successfully.');
     },
     onError: (error: Error) => {
-      toast({
-        title: 'Dependencies disabled',
-        description: error instanceof Error ? error.message : String(error),
-        variant: 'destructive',
-      });
+      toast.error(error instanceof Error ? error.message : String(error));
     },
   });
 }

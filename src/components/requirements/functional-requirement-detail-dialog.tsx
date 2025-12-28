@@ -182,6 +182,7 @@ export function FunctionalRequirementDetailDialog({
               updates: {
                 assignedTo: localAssignedTo,
                 assignedToNames,
+                assigneeIds: localAssignedTo, // Also update assigneeIds for backward compatibility
                 assignedBy: user?.$id,
                 assignedByName: user?.name || user?.email || 'Team Member',
               },
@@ -342,10 +343,13 @@ export function FunctionalRequirementDetailDialog({
               <label className="text-sm font-medium">Progress</label>
               <div className="flex items-center gap-3">
                 <Progress value={requirement.progress ?? 0} className="flex-1 h-2" />
-                <span className="text-sm font-medium w-12 text-right">{requirement.progress ?? 0}%</span>
+                <span className="text-sm font-medium w-12 text-right">
+                  {requirement.progress ?? 0}%
+                </span>
               </div>
               <p className="text-xs text-muted-foreground">
-                Based on linked tasks completion ({linkedTasks.filter(t => t.status === 'DONE').length}/{linkedTasks.length} done)
+                Based on linked tasks completion (
+                {linkedTasks.filter((t) => t.status === 'DONE').length}/{linkedTasks.length} done)
               </p>
             </div>
 

@@ -99,8 +99,10 @@ export function TaskDetailsDialog({
 
   if (!task) return null;
 
-  const status = statusConfig[task.status as keyof typeof statusConfig];
-  const priority = priorityConfig[task.priority as keyof typeof priorityConfig];
+  const status = statusConfig[task.status as keyof typeof statusConfig] || statusConfig.BACKLOG;
+  const priority = task.priority
+    ? priorityConfig[task.priority as keyof typeof priorityConfig]
+    : null;
   const labels = task.labels && Array.isArray(task.labels) ? task.labels : [];
 
   // Handlers for dependency management (currently disabled)
@@ -123,10 +125,12 @@ export function TaskDetailsDialog({
                   {task.hierarchyId}
                 </Badge>
                 <Badge className={status.color}>{status.label}</Badge>
-                <div className="flex items-center gap-1">
-                  <span className={`text-lg ${priority.color}`}>●</span>
-                  <span className="text-sm text-muted-foreground">{priority.label}</span>
-                </div>
+                {priority && (
+                  <div className="flex items-center gap-1">
+                    <span className={`text-lg ${priority.color}`}>●</span>
+                    <span className="text-sm text-muted-foreground">{priority.label}</span>
+                  </div>
+                )}
               </div>
               <DialogTitle className="text-2xl">{task.title}</DialogTitle>
             </div>

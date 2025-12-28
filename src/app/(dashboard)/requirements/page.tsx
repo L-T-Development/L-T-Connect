@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/components/providers/auth-provider';
 import { useCurrentWorkspace } from '@/hooks/use-current-workspace';
 import { useProjects } from '@/hooks/use-project';
@@ -58,7 +58,9 @@ export default function RequirementsPage() {
   const { user } = useAuth();
   const { currentWorkspace } = useCurrentWorkspace();
   const { data: projects = [] } = useProjects(currentWorkspace?.$id);
+  const router = useRouter();
   const searchParams = useSearchParams();
+  const frIdFromUrl = searchParams.get('frId');
 
   // Permission checks - using epic permissions as proxy for requirement management
   const isAdmin = useIsAdmin();
@@ -104,6 +106,21 @@ export default function RequirementsPage() {
   }, []);
 
   const { data: requirements = [], isLoading } = useClientRequirements(selectedProjectId);
+
+  // Open FR detail dialog if frId is in URL (from notification click)
+  React.useEffect(() => {
+    if (frIdFromUrl && requirements.length > 0) {
+      const requirement = requirements.find((r) => r.$id === frIdFromUrl);
+      if (requirement) {
+        setSelectedRequirement(requirement.$id);
+        // Clear the frId from URL after opening the dialog
+        const params = new URLSearchParams(searchParams.toString());
+        params.delete('frId');
+        const newUrl = params.toString() ? `/requirements?${params.toString()}` : '/requirements';
+        router.replace(newUrl);
+      }
+    }
+  }, [frIdFromUrl, requirements, searchParams, router]);
 
   // Filter requirements
   const filteredRequirements = React.useMemo(() => {

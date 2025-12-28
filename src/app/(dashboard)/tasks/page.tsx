@@ -50,7 +50,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import type { Task, TaskStatus } from '@/types';
-import { useIsAdmin, useHasPermission } from '@/hooks/use-permissions';
+import { useIsAdmin, useHasPermission, useUserRole } from '@/hooks/use-permissions';
 import { Permission } from '@/lib/permissions';
 
 export default function TasksPage() {
@@ -59,9 +59,11 @@ export default function TasksPage() {
   const { user } = useAuth();
   const { currentWorkspace } = useCurrentWorkspace();
   const projectIdFromUrl = searchParams.get('projectId');
+  const taskIdFromUrl = searchParams.get('taskId');
 
   // Permission checks - only managers/assistant managers can edit/delete tasks
   const isAdmin = useIsAdmin();
+  const userRole = useUserRole();
   const canEditAnyTask = useHasPermission(Permission.EDIT_ANY_TASK);
   const canDeleteTask = useHasPermission(Permission.DELETE_TASK);
   const canCreateTask = useHasPermission(Permission.CREATE_TASK);
@@ -93,6 +95,21 @@ export default function TasksPage() {
   // const canManageTasks = user?.role === 'MANAGER';
 
   console.log(user?.role);
+
+  // Open task dialog if taskId is in URL (from notification click)
+  React.useEffect(() => {
+    if (taskIdFromUrl && tasks.length > 0) {
+      const task = tasks.find((t) => t.$id === taskIdFromUrl);
+      if (task) {
+        setSelectedTask(task);
+        setIsDetailsDialogOpen(true);
+        // Clear the taskId from URL after opening the dialog
+        const params = new URLSearchParams(searchParams.toString());
+        params.delete('taskId');
+        router.replace(`/tasks?${params.toString()}`);
+      }
+    }
+  }, [taskIdFromUrl, tasks, searchParams, router]);
 
   // Restore project selection from localStorage or set from URL/first project
   React.useEffect(() => {
@@ -418,6 +435,7 @@ export default function TasksPage() {
       projectId: selectedProjectId,
       status: newStatus,
       position: newPosition,
+      currentUserRole: userRole || undefined, // ✅ Pass role for permission check
     });
   };
 

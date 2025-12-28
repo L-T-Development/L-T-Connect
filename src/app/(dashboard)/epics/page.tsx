@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/components/providers/auth-provider';
 import { useCurrentWorkspace } from '@/hooks/use-current-workspace';
 import { useProjects } from '@/hooks/use-project';
@@ -38,6 +39,10 @@ export default function EpicsPage() {
   const { user } = useAuth();
   const { currentWorkspace } = useCurrentWorkspace();
   const { data: projects = [] } = useProjects(currentWorkspace?.$id);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const projectIdFromUrl = searchParams.get('projectId');
+  const epicIdFromUrl = searchParams.get('epicId');
 
   // Permission checks
   const isAdmin = useIsAdmin();
@@ -48,30 +53,51 @@ export default function EpicsPage() {
   const [createDialogOpen, setCreateDialogOpen] = React.useState(false);
   const [selectedEpic, setSelectedEpic] = React.useState<Epic | null>(null);
 
-  // Restore project selection from localStorage or set first project as default
+  const { data: epics = [], isLoading } = useEpics(selectedProjectId);
+  const { data: tasks = [] } = useTasks(selectedProjectId);
+
+  // Restore project selection from URL or localStorage
   React.useEffect(() => {
     const STORAGE_KEY = 'selected-project-id';
-    const savedProjectId = localStorage.getItem(STORAGE_KEY);
 
-    if (savedProjectId && projects.some((p) => p.$id === savedProjectId)) {
-      // Restore saved project if it still exists
-      setSelectedProjectId(savedProjectId);
-    } else if (projects.length > 0 && !selectedProjectId) {
-      // Default to first project if no saved selection
-      const firstProjectId = projects[0].$id;
-      setSelectedProjectId(firstProjectId);
-      localStorage.setItem(STORAGE_KEY, firstProjectId);
+    // Priority: URL param > localStorage > first project
+    if (projectIdFromUrl && projects.some((p) => p.$id === projectIdFromUrl)) {
+      setSelectedProjectId(projectIdFromUrl);
+      localStorage.setItem(STORAGE_KEY, projectIdFromUrl);
+    } else {
+      const savedProjectId = localStorage.getItem(STORAGE_KEY);
+      if (savedProjectId && projects.some((p) => p.$id === savedProjectId)) {
+        // Restore saved project if it still exists
+        setSelectedProjectId(savedProjectId);
+      } else if (projects.length > 0 && !selectedProjectId) {
+        // Default to first project if no saved selection
+        const firstProjectId = projects[0].$id;
+        setSelectedProjectId(firstProjectId);
+        localStorage.setItem(STORAGE_KEY, firstProjectId);
+      }
     }
-  }, [projects, selectedProjectId]);
+  }, [projects, selectedProjectId, projectIdFromUrl]);
+
+  // Open epic dialog if epicId is in URL (from notification click)
+  React.useEffect(() => {
+    if (epicIdFromUrl && epics.length > 0) {
+      const epic = epics.find((e) => e.$id === epicIdFromUrl);
+      if (epic) {
+        setSelectedEpic(epic);
+        // Clear the epicId from URL after opening the dialog
+        const params = new URLSearchParams(searchParams.toString());
+        params.delete('epicId');
+        const newUrl = params.toString() ? `/epics?${params.toString()}` : '/epics';
+        router.replace(newUrl);
+      }
+    }
+  }, [epicIdFromUrl, epics, searchParams, router]);
 
   // Save project selection to localStorage when changed
   const handleProjectChange = React.useCallback((projectId: string) => {
     setSelectedProjectId(projectId);
     localStorage.setItem('selected-project-id', projectId);
   }, []);
-
-  const { data: epics = [], isLoading } = useEpics(selectedProjectId);
-  const { data: tasks = [] } = useTasks(selectedProjectId);
 
   // Calculate stats
   const stats = React.useMemo(() => {

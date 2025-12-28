@@ -401,7 +401,7 @@ export function useUpdateFunctionalRequirement() {
             assignedByName: updatedFR.createdByName || '',
             createdBy: updatedFR.createdBy,
             createdByName: updatedFR.createdByName || '',
-            dueDate: undefined,
+            dueDate: sprint.endDate || undefined, // ✅ Sprint end date becomes task due date
             estimatedHours: 0,
             actualHours: 0,
             sprintId: updates.sprintId, // ✅ Link to sprint
@@ -416,6 +416,22 @@ export function useUpdateFunctionalRequirement() {
 
           await databases.createDocument(DATABASE_ID, TASKS_COLLECTION_ID, ID.unique(), taskData);
 
+          // ✅ Also update existing tasks linked to this FR with sprint info and due date
+          const existingFRTasks = await databases.listDocuments(DATABASE_ID, TASKS_COLLECTION_ID, [
+            Query.equal('functionalRequirementId', requirementId),
+            Query.limit(100),
+          ]);
+
+          // Update all existing tasks with sprint end date and sprintId
+          await Promise.all(
+            existingFRTasks.documents.map((task) =>
+              databases.updateDocument(DATABASE_ID, TASKS_COLLECTION_ID, task.$id, {
+                sprintId: updates.sprintId,
+                dueDate: sprint.endDate || task.dueDate,
+              })
+            )
+          );
+
           // Invalidate task queries to show new task
           queryClient.invalidateQueries({
             queryKey: ['tasks', projectId],
@@ -423,7 +439,7 @@ export function useUpdateFunctionalRequirement() {
 
           toast({
             title: 'Task Created',
-            description: `Auto-created task for FR: ${updatedFR.hierarchyId}`,
+            description: `Auto-created task for FR: ${updatedFR.hierarchyId}. Sprint end date set as due date.`,
           });
         } catch (error) {
           console.error('Error auto-creating task:', error);
