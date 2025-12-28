@@ -1,4 +1,4 @@
-const { Client, Databases, ID, Query } = require('node-appwrite');
+const { Client, Databases, ID } = require('node-appwrite');
 require('dotenv').config({ path: '.env.local' });
 
 const client = new Client()
