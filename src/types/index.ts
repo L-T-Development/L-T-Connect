@@ -82,8 +82,20 @@ export interface ProjectSettings {
 
 // Client Requirements
 export type RequirementPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
-export type RequirementStatus = 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'IN_PROGRESS' | 'COMPLETED' | 'ARCHIVED';
-export type FunctionalRequirementStatus = 'DRAFT' | 'REVIEW' | 'APPROVED' | 'IMPLEMENTED' | 'TESTED' | 'DEPLOYED';
+export type RequirementStatus =
+  | 'DRAFT'
+  | 'SUBMITTED'
+  | 'APPROVED'
+  | 'IN_PROGRESS'
+  | 'COMPLETED'
+  | 'ARCHIVED';
+export type FunctionalRequirementStatus =
+  | 'DRAFT'
+  | 'REVIEW'
+  | 'APPROVED'
+  | 'IMPLEMENTED'
+  | 'TESTED'
+  | 'DEPLOYED';
 
 export interface ClientRequirement {
   $id: string;
@@ -108,7 +120,7 @@ export interface FunctionalRequirement {
   $id: string;
   workspaceId: string;
   projectId: string;
-  hierarchyId: string; // e.g., "FR-01", "FR-02"
+  hierarchyId: string; // e.g., "PTES-RAU-EAU-FRL-01" (Project-CR-Epic-FR-Seq)
   epicId?: string; // ✅ FIXED: Link to parent epic (primary parent)
   sprintId?: string; // ✅ NEW: Optional sprint assignment
   clientRequirementId?: string; // Keep for traceability
@@ -117,6 +129,7 @@ export interface FunctionalRequirement {
   complexity: FRComplexity;
   priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'; // ✅ NEW: Priority field
   status: FunctionalRequirementStatus;
+  progress?: number; // ✅ NEW: Progress percentage (0-100) based on linked tasks
   reusable: boolean;
   assignedTo?: string[]; // ✅ NEW: Array of user IDs assigned to this FR
   assignedToNames?: string[]; // ✅ NEW: Denormalized names for display
@@ -175,7 +188,7 @@ export interface Task {
   $id: string;
   workspaceId: string;
   projectId: string;
-  hierarchyId: string; // e.g., "PTE-RAU-EAU-FRL-SS1-TT1"
+  hierarchyId: string; // e.g., "PTES-RAU-EAU-FRL-01-LOG-01" (FR-TaskCode-Seq)
   sprintId?: string;
   epicId?: string;
   functionalRequirementId?: string; // Link to FR for full hierarchy
@@ -725,5 +738,3 @@ export interface Holiday {
   createdAt: string;
   updatedAt: string;
 }
-
-

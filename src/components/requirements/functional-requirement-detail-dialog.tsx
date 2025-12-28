@@ -28,16 +28,23 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Trash2, Link as LinkIcon, MessageSquare, UserPlus, X, Calendar, Copy } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
+import { Trash2, Link as LinkIcon, Calendar, Copy, Save } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
-import { useUpdateFunctionalRequirement, useDeleteFunctionalRequirement, useCloneFunctionalRequirement } from '@/hooks/use-functional-requirement';
+import {
+  useUpdateFunctionalRequirement,
+  useDeleteFunctionalRequirement,
+  useCloneFunctionalRequirement,
+} from '@/hooks/use-functional-requirement';
 import { useTeamMembers } from '@/hooks/use-team';
 import { useSprints } from '@/hooks/use-sprint';
 import { useProjects } from '@/hooks/use-project';
+import { useTasksByFunctionalRequirement, useUpdateTask } from '@/hooks/use-task';
+import { TeamMemberSelector } from '@/components/tasks/team-member-selector';
+import { createBulkNotifications } from '@/hooks/use-notification';
+import { useAuth } from '@/components/providers/auth-provider';
 import type { FunctionalRequirement, ClientRequirement } from '@/types';
-import { CommentSection } from '@/components/comments/comment-section';
 
 const statusConfig: Record<FunctionalRequirement['status'], { label: string; color: string }> = {
   DRAFT: { label: 'Draft', color: 'bg-gray-500' },
@@ -56,7 +63,10 @@ const statusConfig: Record<FunctionalRequirement['status'], { label: string; col
 //   BUSINESS: { label: 'Business', color: 'green' },
 // };
 
-const complexityConfig: Record<FunctionalRequirement['complexity'], { label: string; color: string }> = {
+const complexityConfig: Record<
+  FunctionalRequirement['complexity'],
+  { label: string; color: string }
+> = {
   LOW: { label: 'Low', color: 'green' },
   MEDIUM: { label: 'Medium', color: 'yellow' },
   HIGH: { label: 'High', color: 'orange' },
@@ -70,6 +80,8 @@ interface FunctionalRequirementDetailDialogProps {
   projectId: string;
   workspaceId: string;
   clientRequirements: ClientRequirement[];
+  canEdit?: boolean; // Permission to edit requirements
+  canDelete?: boolean; // Permission to delete requirements
 }
 
 export function FunctionalRequirementDetailDialog({
@@ -79,67 +91,172 @@ export function FunctionalRequirementDetailDialog({
   projectId,
   workspaceId,
   clientRequirements,
+  canEdit = false,
+  canDelete = false,
 }: FunctionalRequirementDetailDialogProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
   const [cloneDialogOpen, setCloneDialogOpen] = React.useState(false);
   const [selectedProject, setSelectedProject] = React.useState<string>('');
+
+  // Local state for editable fields
+  const [localSprintId, setLocalSprintId] = React.useState<string>(requirement.sprintId || '');
+  const [localAssignedTo, setLocalAssignedTo] = React.useState<string[]>(
+    requirement.assignedTo || []
+  );
+  const [hasChanges, setHasChanges] = React.useState(false);
+
   const updateRequirement = useUpdateFunctionalRequirement();
   const deleteRequirement = useDeleteFunctionalRequirement();
   const cloneRequirement = useCloneFunctionalRequirement();
+  const updateTask = useUpdateTask();
   const { toast } = useToast();
-  
-  // Load workspace members and sprints
+  const { user } = useAuth();
+
+  // Load workspace members, sprints, and linked tasks
   const { data: members = [] } = useTeamMembers(workspaceId);
   const { data: sprints = [] } = useSprints(projectId);
   const { data: projects = [] } = useProjects(workspaceId);
+  const { data: linkedTasks = [] } = useTasksByFunctionalRequirement(requirement.$id);
 
-  const handleSprintAssignment = async (sprintId: string) => {
-    await updateRequirement.mutateAsync({
-      requirementId: requirement.$id,
-      projectId,
-      updates: { sprintId: sprintId === 'none' ? '' : sprintId },
-      previousSprintId: requirement.sprintId || undefined, // ✅ Track previous sprint
-    });
+  // Reset local state when requirement changes
+  React.useEffect(() => {
+    setLocalSprintId(requirement.sprintId || '');
+    setLocalAssignedTo(requirement.assignedTo || []);
+    setHasChanges(false);
+  }, [requirement.$id, requirement.sprintId, requirement.assignedTo]);
+
+  // Track changes
+  React.useEffect(() => {
+    const sprintChanged = localSprintId !== (requirement.sprintId || '');
+    const assigneesChanged =
+      JSON.stringify(localAssignedTo.sort()) !==
+      JSON.stringify((requirement.assignedTo || []).sort());
+    setHasChanges(sprintChanged || assigneesChanged);
+  }, [localSprintId, localAssignedTo, requirement.sprintId, requirement.assignedTo]);
+
+  const handleSprintChange = (sprintId: string) => {
+    setLocalSprintId(sprintId === 'none' ? '' : sprintId);
   };
 
-  const handleAddTeamMember = async (userId: string) => {
-    const member = members.find(m => m.userId === userId);
-    if (!member) return;
+  const handleTeamMemberChange = (userIds: string[]) => {
+    setLocalAssignedTo(userIds);
+  };
 
-    const currentAssignedTo = requirement.assignedTo || [];
-    const currentAssignedToNames = requirement.assignedToNames || [];
+  const handleSave = async () => {
+    // Build assignedToNames from selected user IDs
+    const assignedToNames = localAssignedTo.map((userId) => {
+      const member = members.find((m) => m.userId === userId);
+      return member?.name || member?.email || 'Unknown';
+    });
 
-    if (currentAssignedTo.includes(userId)) return; // Already assigned
+    // Check if assignees changed
+    const previousAssignees = requirement.assignedTo || [];
+    const assigneesChanged =
+      JSON.stringify(localAssignedTo.sort()) !== JSON.stringify(previousAssignees.sort());
+    const newAssignees = localAssignedTo.filter((id) => !previousAssignees.includes(id));
+
+    // Get project name for notifications
+    const currentProject = projects.find((p) => p.$id === projectId);
+    const projectName = currentProject?.name || 'Project';
 
     await updateRequirement.mutateAsync({
       requirementId: requirement.$id,
       projectId,
       updates: {
-        assignedTo: [...currentAssignedTo, userId],
-        assignedToNames: [...currentAssignedToNames, member.name || member.email || 'Unknown'],
+        sprintId: localSprintId || undefined,
+        assignedTo: localAssignedTo,
+        assignedToNames,
       },
+      previousSprintId: requirement.sprintId || undefined,
     });
-  };
 
-  const handleRemoveTeamMember = async (userId: string) => {
-    const currentAssignedTo = requirement.assignedTo || [];
-    const currentAssignedToNames = requirement.assignedToNames || [];
+    // ✅ AUTO-ASSIGN: Update linked tasks with the same assignees
+    if (assigneesChanged && linkedTasks.length > 0) {
+      try {
+        // Update all linked tasks with the new assignees
+        await Promise.all(
+          linkedTasks.map((task) =>
+            updateTask.mutateAsync({
+              taskId: task.$id,
+              projectId,
+              updates: {
+                assignedTo: localAssignedTo,
+                assignedToNames,
+                assignedBy: user?.$id,
+                assignedByName: user?.name || user?.email || 'Team Member',
+              },
+            })
+          )
+        );
 
-    const index = currentAssignedTo.indexOf(userId);
-    if (index === -1) return;
+        toast({
+          title: 'Tasks Updated',
+          description: `${linkedTasks.length} linked task(s) were also assigned to the same team members.`,
+        });
 
-    const newAssignedTo = currentAssignedTo.filter(id => id !== userId);
-    const newAssignedToNames = [...currentAssignedToNames];
-    newAssignedToNames.splice(index, 1);
+        // Send notifications to newly assigned members for each task
+        if (newAssignees.length > 0) {
+          for (const task of linkedTasks) {
+            try {
+              await createBulkNotifications({
+                workspaceId,
+                userIds: newAssignees,
+                type: 'TASK_ASSIGNED',
+                data: {
+                  taskId: task.$id,
+                  taskTitle: task.title,
+                  taskHierarchyId: task.hierarchyId,
+                  projectId,
+                  projectName,
+                  assignerName: user?.name || user?.email || 'Team Member',
+                  priority: task.priority,
+                  dueDate: task.dueDate,
+                  entityType: 'TASK',
+                },
+              });
+            } catch (error) {
+              console.error('Failed to send task assignment notification:', error);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Failed to update linked tasks:', error);
+        toast({
+          title: 'Warning',
+          description: 'FR updated but failed to update some linked tasks.',
+          variant: 'destructive',
+        });
+      }
+    }
 
-    await updateRequirement.mutateAsync({
-      requirementId: requirement.$id,
-      projectId,
-      updates: {
-        assignedTo: newAssignedTo,
-        assignedToNames: newAssignedToNames,
-      },
+    // ✅ Send FR assignment notifications to new assignees
+    if (newAssignees.length > 0) {
+      try {
+        await createBulkNotifications({
+          workspaceId,
+          userIds: newAssignees,
+          type: 'FR_ASSIGNED',
+          data: {
+            frId: requirement.$id,
+            frTitle: requirement.title,
+            frHierarchyId: requirement.hierarchyId,
+            projectId,
+            projectName,
+            assignerName: user?.name || user?.email || 'Team Member',
+            entityType: 'FR',
+          },
+        });
+      } catch (error) {
+        console.error('Failed to send FR assignment notifications:', error);
+      }
+    }
+
+    toast({
+      title: 'Saved',
+      description: 'Functional requirement updated successfully.',
     });
+
+    setHasChanges(false);
   };
 
   const handleDelete = async () => {
@@ -161,7 +278,7 @@ export function FunctionalRequirementDetailDialog({
       return;
     }
 
-    const targetProj = projects.find(p => p.$id === selectedProject);
+    const targetProj = projects.find((p) => p.$id === selectedProject);
     if (!targetProj) return;
 
     await cloneRequirement.mutateAsync({
@@ -177,14 +294,12 @@ export function FunctionalRequirementDetailDialog({
   };
 
   const complexity = complexityConfig[requirement.complexity];
-  const linkedClientReq = clientRequirements.find(cr => cr.$id === requirement.clientRequirementId);
-  
-  // Get unassigned members - check using userId field
-  const assignedIds = requirement.assignedTo || [];
-  const unassignedMembers = members.filter(m => !assignedIds.includes(m.userId));
-  
-  // Get assigned sprint name
-  const assignedSprint = sprints.find(s => s.$id === requirement.sprintId);
+  const linkedClientReq = clientRequirements.find(
+    (cr) => cr.$id === requirement.clientRequirementId
+  );
+
+  // Get assigned sprint name (for display)
+  const selectedSprint = sprints.find((s) => s.$id === localSprintId);
 
   return (
     <>
@@ -197,9 +312,7 @@ export function FunctionalRequirementDetailDialog({
                   <Badge variant="outline" className="font-mono">
                     {requirement.hierarchyId}
                   </Badge>
-                  {requirement.reusable && (
-                    <Badge variant="secondary">Reusable</Badge>
-                  )}
+                  {requirement.reusable && <Badge variant="secondary">Reusable</Badge>}
                 </div>
                 <DialogTitle className="text-2xl">{requirement.title}</DialogTitle>
                 {requirement.description && (
@@ -207,25 +320,6 @@ export function FunctionalRequirementDetailDialog({
                     {requirement.description}
                   </DialogDescription>
                 )}
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setCloneDialogOpen(true)}
-                  className="text-blue-600 hover:text-blue-700 dark:text-blue-400"
-                  title="Clone to another project"
-                >
-                  <Copy className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setDeleteDialogOpen(true)}
-                  className="text-destructive hover:text-destructive"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
               </div>
             </div>
           </DialogHeader>
@@ -241,6 +335,18 @@ export function FunctionalRequirementDetailDialog({
                   (Auto-calculated from tasks)
                 </span>
               </div>
+            </div>
+
+            {/* Progress */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Progress</label>
+              <div className="flex items-center gap-3">
+                <Progress value={requirement.progress ?? 0} className="flex-1 h-2" />
+                <span className="text-sm font-medium w-12 text-right">{requirement.progress ?? 0}%</span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Based on linked tasks completion ({linkedTasks.filter(t => t.status === 'DONE').length}/{linkedTasks.length} done)
+              </p>
             </div>
 
             <Separator />
@@ -280,26 +386,25 @@ export function FunctionalRequirementDetailDialog({
                 <Calendar className="h-4 w-4" />
                 Assign to Sprint
               </label>
-              <Select 
-                value={requirement.sprintId || 'none'} 
-                onValueChange={handleSprintAssignment}
-              >
+              <Select value={localSprintId || 'none'} onValueChange={handleSprintChange}>
                 <SelectTrigger>
                   <SelectValue placeholder="No sprint assigned" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">No sprint</SelectItem>
                   {sprints.map((sprint) => (
-                    <SelectItem key={sprint.$id} value={sprint.$id}>
-                      {sprint.name} ({sprint.status})
+                    <SelectItem
+                      key={sprint.$id}
+                      value={sprint.$id}
+                      disabled={sprint.status === 'COMPLETED'}
+                    >
+                      {sprint.name} ({sprint.status}){sprint.status === 'COMPLETED' && ' - Closed'}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              {assignedSprint && (
-                <p className="text-sm text-muted-foreground">
-                  Currently in: {assignedSprint.name}
-                </p>
+              {selectedSprint && (
+                <p className="text-sm text-muted-foreground">Selected: {selectedSprint.name}</p>
               )}
             </div>
 
@@ -307,78 +412,14 @@ export function FunctionalRequirementDetailDialog({
 
             {/* Team Assignment */}
             <div className="space-y-3">
-              <label className="text-sm font-medium flex items-center gap-2">
-                <UserPlus className="h-4 w-4" />
-                Assigned Team Members
-              </label>
-              
-              {/* Assigned Members */}
-              {assignedIds.length > 0 && (
-                <div className="flex flex-wrap gap-2 mb-3">
-                  {assignedIds.map((userId, index) => {
-                    const member = members.find(m => m.userId === userId);
-                    const memberName = requirement.assignedToNames?.[index] || member?.name || member?.email || 'Unknown';
-                    const initials = memberName
-                      .split(' ')
-                      .map(n => n[0])
-                      .join('')
-                      .toUpperCase()
-                      .slice(0, 2);
-
-                    return (
-                      <div
-                        key={userId}
-                        className="flex items-center gap-2 px-3 py-1.5 bg-secondary rounded-full"
-                      >
-                        <Avatar className="h-6 w-6">
-                          <AvatarFallback className="text-xs">{initials}</AvatarFallback>
-                        </Avatar>
-                        <span className="text-sm">{memberName}</span>
-                        <button
-                          onClick={() => handleRemoveTeamMember(userId)}
-                          className="hover:text-destructive transition-colors"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* Add Member Dropdown */}
-              {unassignedMembers.length > 0 ? (
-                <Select onValueChange={handleAddTeamMember}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Add team member..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {unassignedMembers.map((member) => (
-                      <SelectItem key={member.$id} value={member.userId}>
-                        <div className="flex items-center gap-2">
-                          <Avatar className="h-6 w-6">
-                            <AvatarFallback className="text-xs">
-                              {member.name
-                                ? member.name
-                                    .split(' ')
-                                    .map(n => n[0])
-                                    .join('')
-                                    .toUpperCase()
-                                    .slice(0, 2)
-                                : member.email?.slice(0, 2).toUpperCase() || 'U'}
-                            </AvatarFallback>
-                          </Avatar>
-                          {member.name || member.email}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : assignedIds.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No team members available</p>
-              ) : (
-                <p className="text-sm text-muted-foreground">All members assigned</p>
-              )}
+              <label className="text-sm font-medium">Assigned Team Members</label>
+              <TeamMemberSelector
+                workspaceId={workspaceId}
+                value={localAssignedTo}
+                onChange={handleTeamMemberChange}
+                placeholder="Select team members..."
+                multiSelect={true}
+              />
             </div>
 
             <Separator />
@@ -400,7 +441,9 @@ export function FunctionalRequirementDetailDialog({
                     )}
                     <div className="flex items-center gap-2 mt-2">
                       <Badge variant="outline">{linkedClientReq.priority}</Badge>
-                      <Badge className={`bg-${linkedClientReq.status === 'APPROVED' ? 'green' : 'gray'}-500`}>
+                      <Badge
+                        className={`bg-${linkedClientReq.status === 'APPROVED' ? 'green' : 'gray'}-500`}
+                      >
                         {linkedClientReq.status}
                       </Badge>
                     </div>
@@ -427,16 +470,51 @@ export function FunctionalRequirementDetailDialog({
                 </div>
               </div>
             </div>
+          </div>
 
-            <Separator />
-
-            {/* Comments Section */}
-            <div>
-              <div className="flex items-center gap-2 text-sm font-medium mb-4">
-                <MessageSquare className="h-4 w-4" />
-                Comments
-              </div>
-              <CommentSection entityId={requirement.$id} />
+          {/* Footer with Save and Actions */}
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-0">
+            <div className="flex gap-2 w-full sm:w-auto">
+              {canEdit && (
+                <Button
+                  variant="outline"
+                  onClick={() => setCloneDialogOpen(true)}
+                  className="flex-1 sm:flex-none"
+                  title="Clone to another project"
+                >
+                  <Copy className="h-4 w-4 mr-2" />
+                  Clone
+                </Button>
+              )}
+              {canDelete && (
+                <Button
+                  variant="outline"
+                  onClick={() => setDeleteDialogOpen(true)}
+                  className="flex-1 sm:flex-none text-destructive hover:text-destructive"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete
+                </Button>
+              )}
+            </div>
+            <div className="flex gap-2 w-full sm:w-auto sm:ml-auto">
+              <Button
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+                className="flex-1 sm:flex-none"
+              >
+                {hasChanges ? 'Cancel' : 'Close'}
+              </Button>
+              {canEdit && (
+                <Button
+                  onClick={handleSave}
+                  disabled={!hasChanges || updateRequirement.isPending}
+                  className="flex-1 sm:flex-none"
+                >
+                  <Save className="h-4 w-4 mr-2" />
+                  {updateRequirement.isPending ? 'Saving...' : 'Save'}
+                </Button>
+              )}
             </div>
           </div>
         </DialogContent>
@@ -448,11 +526,12 @@ export function FunctionalRequirementDetailDialog({
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Functional Requirement?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete "{requirement.title}". This action cannot be undone.
+              This will permanently delete &lquo;{requirement.title}&rquo;. This action cannot be
+              undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogFooter className="flex-col-reverse sm:flex-row sm:justify-between sm:space-x-0">
+            <AlertDialogCancel className="mt-2 sm:mt-0">Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
@@ -469,7 +548,8 @@ export function FunctionalRequirementDetailDialog({
           <AlertDialogHeader>
             <AlertDialogTitle>Clone Functional Requirement</AlertDialogTitle>
             <AlertDialogDescription>
-              Clone "{requirement.hierarchyId}" to another project. The FR will be duplicated with a new hierarchy ID.
+              Clone &lquo;{requirement.hierarchyId}&rquo; to another project. The FR will be
+              duplicated with a new hierarchy ID.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="py-4">
@@ -480,8 +560,8 @@ export function FunctionalRequirementDetailDialog({
               </SelectTrigger>
               <SelectContent>
                 {projects
-                  .filter(p => p.$id !== projectId) // Exclude current project
-                  .map(project => (
+                  .filter((p) => p.$id !== projectId) // Exclude current project
+                  .map((project) => (
                     <SelectItem key={project.$id} value={project.$id}>
                       {project.shortCode} - {project.name}
                     </SelectItem>

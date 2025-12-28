@@ -31,8 +31,12 @@ import type { RequirementStatus, RequirementPriority } from '@/types';
 import { CreateClientRequirementDialog } from '@/components/requirements/create-client-requirement-dialog';
 import { ClientRequirementDetailDialog } from '@/components/requirements/client-requirement-detail-dialog';
 import { AIGenerateDialog } from '@/components/ai/ai-generate-dialog';
-import { toast } from '@/hooks/use-toast';
 import type { GeneratedHierarchy } from '@/lib/ai-generator';
+import { useIsAdmin, useHasPermission } from '@/hooks/use-permissions';
+import { Permission } from '@/lib/permissions';
+
+// Add permission for requirements (using epic permission as proxy since requirements follow similar hierarchy)
+// Note: In a production app, you might want to add specific requirement permissions
 
 const statusConfig: Record<RequirementStatus, { label: string; icon: any; variant: any }> = {
   DRAFT: { label: 'Draft', icon: FileText, variant: 'secondary' },
@@ -56,6 +60,12 @@ export default function RequirementsPage() {
   const { data: projects = [] } = useProjects(currentWorkspace?.$id);
   const searchParams = useSearchParams();
 
+  // Permission checks - using epic permissions as proxy for requirement management
+  const isAdmin = useIsAdmin();
+  const canCreateRequirement = useHasPermission(Permission.CREATE_EPIC);
+  const canEditRequirement = useHasPermission(Permission.EDIT_EPIC);
+  const canDeleteRequirement = useHasPermission(Permission.DELETE_EPIC);
+
   const [selectedProjectId, setSelectedProjectId] = React.useState<string>('');
   const [searchQuery, setSearchQuery] = React.useState('');
   const [statusFilter, setStatusFilter] = React.useState<RequirementStatus | 'ALL'>('ALL');
@@ -63,7 +73,6 @@ export default function RequirementsPage() {
   const [createDialogOpen, setCreateDialogOpen] = React.useState(false);
   const [aiGenerateDialogOpen, setAiGenerateDialogOpen] = React.useState(false);
   const [selectedRequirement, setSelectedRequirement] = React.useState<string | null>(null);
-  const [isSavingGenerated, setIsSavingGenerated] = React.useState(false);
 
   // Handle project selection: prioritize URL param, then localStorage, then first project
   React.useEffect(() => {
@@ -72,12 +81,12 @@ export default function RequirementsPage() {
     const savedProjectId = localStorage.getItem(STORAGE_KEY);
 
     // Priority 1: URL parameter (from "View Requirements" button)
-    if (urlProjectId && projects.some(p => p.$id === urlProjectId)) {
+    if (urlProjectId && projects.some((p) => p.$id === urlProjectId)) {
       setSelectedProjectId(urlProjectId);
       localStorage.setItem(STORAGE_KEY, urlProjectId);
     }
     // Priority 2: localStorage (previously selected)
-    else if (savedProjectId && projects.some(p => p.$id === savedProjectId)) {
+    else if (savedProjectId && projects.some((p) => p.$id === savedProjectId)) {
       setSelectedProjectId(savedProjectId);
     }
     // Priority 3: First project as default
@@ -98,8 +107,9 @@ export default function RequirementsPage() {
 
   // Filter requirements
   const filteredRequirements = React.useMemo(() => {
-    return requirements.filter(req => {
-      const matchesSearch = req.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    return requirements.filter((req) => {
+      const matchesSearch =
+        req.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         req.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
         req.clientName.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesStatus = statusFilter === 'ALL' || req.status === statusFilter;
@@ -113,57 +123,20 @@ export default function RequirementsPage() {
   const stats = React.useMemo(() => {
     return {
       total: requirements.length,
-      draft: requirements.filter(r => r.status === 'DRAFT').length,
-      submitted: requirements.filter(r => r.status === 'SUBMITTED').length,
-      approved: requirements.filter(r => r.status === 'APPROVED').length,
-      inProgress: requirements.filter(r => r.status === 'IN_PROGRESS').length,
-      completed: requirements.filter(r => r.status === 'COMPLETED').length,
+      draft: requirements.filter((r) => r.status === 'DRAFT').length,
+      submitted: requirements.filter((r) => r.status === 'SUBMITTED').length,
+      approved: requirements.filter((r) => r.status === 'APPROVED').length,
+      inProgress: requirements.filter((r) => r.status === 'IN_PROGRESS').length,
+      completed: requirements.filter((r) => r.status === 'COMPLETED').length,
     };
   }, [requirements]);
 
-  const selectedProject = projects.find(p => p.$id === selectedProjectId);
+  const selectedProject = projects.find((p) => p.$id === selectedProjectId);
 
-  const handleAIGenerated = async (generated: GeneratedHierarchy) => {
-    if (!selectedProject || !currentWorkspace || !user) return;
-
-    setIsSavingGenerated(true);
-    try {
-      const response = await fetch('/api/bulk-save', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          generated,
-          projectId: selectedProjectId,
-          projectCode: selectedProject.shortCode,
-          workspaceId: currentWorkspace.$id,
-          userId: user.$id,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to save generated data');
-      }
-
-      toast({
-        title: 'Success!',
-        description: `Generated ${generated.clientRequirements.length} client requirements, ${generated.functionalRequirements.length} functional requirements, ${generated.epics.length} epics, and ${generated.tasks.length} tasks`,
-      });
-
-      // Refresh data
-      window.location.reload();
-    } catch (error: any) {
-      toast({
-        title: 'Error',
-        description: (error instanceof Error ? error.message : String(error)) || 'Failed to save generated data',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsSavingGenerated(false);
-    }
+  // The dialog now handles bulk save internally, this callback is for any additional handling
+  const handleAIGenerated = (generated: GeneratedHierarchy) => {
+    console.log('AI Generated Data:', generated);
+    // The dialog handles saving, toasts, and page reload
   };
 
   return (
@@ -172,23 +145,25 @@ export default function RequirementsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Requirements</h1>
-          <p className="text-muted-foreground">
-            Manage client and functional requirements
-          </p>
+          <p className="text-muted-foreground">Manage client and functional requirements</p>
         </div>
         <div className="flex gap-2">
-          <Button
-            onClick={() => setAiGenerateDialogOpen(true)}
-            disabled={!selectedProjectId || isSavingGenerated}
-            className="bg-purple-600 hover:bg-purple-700"
-          >
-            <Sparkles className="mr-2 h-4 w-4" />
-            Generate with AI
-          </Button>
-          <Button onClick={() => setCreateDialogOpen(true)} disabled={!selectedProjectId}>
-            <Plus className="mr-2 h-4 w-4" />
-            New Requirement
-          </Button>
+          {(canCreateRequirement || isAdmin) && (
+            <>
+              <Button
+                onClick={() => setAiGenerateDialogOpen(true)}
+                disabled={!selectedProjectId}
+                className="bg-purple-600 hover:bg-purple-700"
+              >
+                <Sparkles className="mr-2 h-4 w-4" />
+                Generate with AI
+              </Button>
+              <Button onClick={() => setCreateDialogOpen(true)} disabled={!selectedProjectId}>
+                <Plus className="mr-2 h-4 w-4" />
+                New Requirement
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
@@ -296,7 +271,10 @@ export default function RequirementsPage() {
                     />
                   </div>
                 </div>
-                <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as any)}>
+                <Select
+                  value={statusFilter}
+                  onValueChange={(value) => setStatusFilter(value as any)}
+                >
                   <SelectTrigger className="w-full md:w-[200px]">
                     <SelectValue placeholder="Status" />
                   </SelectTrigger>
@@ -310,7 +288,10 @@ export default function RequirementsPage() {
                     <SelectItem value="ARCHIVED">Archived</SelectItem>
                   </SelectContent>
                 </Select>
-                <Select value={priorityFilter} onValueChange={(value) => setPriorityFilter(value as any)}>
+                <Select
+                  value={priorityFilter}
+                  onValueChange={(value) => setPriorityFilter(value as any)}
+                >
                   <SelectTrigger className="w-full md:w-[200px]">
                     <SelectValue placeholder="Priority" />
                   </SelectTrigger>
@@ -377,9 +358,7 @@ export default function RequirementsPage() {
                             className="cursor-pointer hover:bg-accent"
                             onClick={() => setSelectedRequirement(requirement.$id)}
                           >
-                            <TableCell className="font-medium">
-                              {requirement.title}
-                            </TableCell>
+                            <TableCell className="font-medium">{requirement.title}</TableCell>
                             <TableCell>{requirement.clientName}</TableCell>
                             <TableCell>
                               <div className="flex items-center gap-1">
@@ -388,7 +367,10 @@ export default function RequirementsPage() {
                               </div>
                             </TableCell>
                             <TableCell>
-                              <Badge variant={status.variant} className="flex items-center gap-1 w-fit">
+                              <Badge
+                                variant={status.variant}
+                                className="flex items-center gap-1 w-fit"
+                              >
                                 <StatusIcon className="h-3 w-3" />
                                 {status.label}
                               </Badge>
@@ -447,6 +429,8 @@ export default function RequirementsPage() {
         open={!!selectedRequirement}
         onOpenChange={(open: boolean) => !open && setSelectedRequirement(null)}
         projectId={selectedProjectId}
+        canEdit={canEditRequirement || isAdmin}
+        canDelete={canDeleteRequirement || isAdmin}
       />
     </div>
   );

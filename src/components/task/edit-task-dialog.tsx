@@ -99,25 +99,47 @@ export function EditTaskDialog({
 
   const labels = form.watch('labels') || [];
 
-  const handleAddLabel = () => {
+  const handleAddLabel = (labelToAdd: string) => {
+    const currentLabels = form.getValues('labels') || [];
+    if (!currentLabels.includes(labelToAdd)) {
+      form.setValue('labels', [...currentLabels, labelToAdd], { shouldDirty: true });
+    }
+  };
+
+  const handleCreateLabel = () => {
     if (newLabel.trim()) {
       const labelWithColor = `${selectedColor}:${newLabel.trim()}`;
-      form.setValue('labels', [...labels, labelWithColor]);
+      handleAddLabel(labelWithColor);
       setNewLabel('');
     }
   };
 
   const handleRemoveLabel = (index: number) => {
-    const updated = labels.filter((_, i) => i !== index);
-    form.setValue('labels', updated);
+    const currentLabels = form.getValues('labels') || [];
+    const updated = currentLabels.filter((_, i) => i !== index);
+    form.setValue('labels', updated, { shouldDirty: true });
+  };
+
+  // Parse labels - handle both array and JSON string
+  const parseLabels = (labelsData: unknown): string[] => {
+    if (!labelsData) return [];
+    if (Array.isArray(labelsData)) return labelsData;
+    if (typeof labelsData === 'string') {
+      try {
+        const parsed = JSON.parse(labelsData);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
   };
 
   // Update form when task changes
   React.useEffect(() => {
     if (task) {
-      const taskLabels = task.labels && Array.isArray(task.labels) ? task.labels : [];
-      const assigneeIds =
-        task.assigneeIds && Array.isArray(task.assigneeIds) ? task.assigneeIds : [];
+      const taskLabels = parseLabels(task.labels);
+      const assigneeIds = parseLabels(task.assigneeIds);
       form.reset({
         title: task.title,
         description: task.description || '',
@@ -347,12 +369,12 @@ export function EditTaskDialog({
                           key={index}
                           variant="outline"
                           className="cursor-pointer hover:bg-accent"
-                          onClick={() => form.setValue('labels', [...labels, label])}
+                          onClick={() => handleAddLabel(label)}
                         >
                           <div
                             className={`w-2 h-2 rounded-full mr-1 ${colorConfig?.class || 'bg-gray-500'}`}
                           />
-                          {text}
+                          {text || label}
                         </Badge>
                       );
                     })}
@@ -383,12 +405,12 @@ export function EditTaskDialog({
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         e.preventDefault();
-                        handleAddLabel();
+                        handleCreateLabel();
                       }
                     }}
                     className="flex-1"
                   />
-                  <Button type="button" onClick={handleAddLabel} variant="outline">
+                  <Button type="button" onClick={handleCreateLabel} variant="outline">
                     Add
                   </Button>
                 </div>
@@ -402,14 +424,14 @@ export function EditTaskDialog({
                     const colorConfig = LABEL_COLORS.find((c) => c.value === color);
                     return (
                       <Badge
-                        key={index}
+                        key={`${label}-${index}`}
                         variant="secondary"
                         className="flex items-center gap-1 pr-1"
                       >
                         <div
                           className={`w-2 h-2 rounded-full ${colorConfig?.class || 'bg-gray-500'}`}
                         />
-                        {text}
+                        {text || label}
                         <button
                           type="button"
                           onClick={() => handleRemoveLabel(index)}
@@ -424,7 +446,7 @@ export function EditTaskDialog({
               )}
             </div>
 
-            <DialogFooter>
+            <DialogFooter className="justify-end">
               <Button
                 type="button"
                 variant="outline"

@@ -10,8 +10,84 @@ const DATABASE_ID = process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!;
 const TASKS_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_TASKS_COLLECTION_ID!;
 const FUNCTIONAL_REQUIREMENTS_COLLECTION_ID =
   process.env.NEXT_PUBLIC_APPWRITE_FUNCTIONAL_REQUIREMENTS_COLLECTION_ID!;
+const REQUIREMENTS_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_REQUIREMENTS_COLLECTION_ID!;
+const EPICS_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_EPICS_COLLECTION_ID!;
 const SPRINTS_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_SPRINTS_COLLECTION_ID!;
 const PROJECTS_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_PROJECTS_COLLECTION_ID!;
+
+// ✅ Helper: Update FR and Epic progress based on task completion
+async function updateParentProgress(task: Task) {
+  console.log('updateParentProgress called with task:', {
+    taskId: task.$id,
+    functionalRequirementId: task.functionalRequirementId,
+    epicId: task.epicId,
+    status: task.status,
+  });
+
+  try {
+    // Update FR progress if task is linked to an FR
+    if (task.functionalRequirementId) {
+      // Get all tasks for this FR
+      const frTasks = await databases.listDocuments(DATABASE_ID, TASKS_COLLECTION_ID, [
+        Query.equal('functionalRequirementId', task.functionalRequirementId),
+        Query.limit(100),
+      ]);
+
+      if (frTasks.total > 0) {
+        const completedTasks = frTasks.documents.filter((t: any) => t.status === 'DONE').length;
+        const progress = Math.round((completedTasks / frTasks.total) * 100);
+
+        console.log('Updating FR progress:', {
+          frId: task.functionalRequirementId,
+          totalTasks: frTasks.total,
+          completedTasks,
+          progress,
+        });
+
+        // Update FR progress
+        await databases.updateDocument(
+          DATABASE_ID,
+          REQUIREMENTS_COLLECTION_ID,
+          task.functionalRequirementId,
+          { progress }
+        );
+      }
+    }
+
+    // Update Epic progress if task is linked to an Epic
+    if (task.epicId) {
+      // Get all tasks for this Epic
+      const epicTasks = await databases.listDocuments(DATABASE_ID, TASKS_COLLECTION_ID, [
+        Query.equal('epicId', task.epicId),
+        Query.limit(100),
+      ]);
+
+      if (epicTasks.total > 0) {
+        const completedTasks = epicTasks.documents.filter((t: any) => t.status === 'DONE').length;
+        const progress = Math.round((completedTasks / epicTasks.total) * 100);
+
+        // Update Epic progress and status
+        const epicStatus = progress === 100 ? 'DONE' : progress > 0 ? 'IN_PROGRESS' : 'TODO';
+
+        console.log('Updating Epic progress:', {
+          epicId: task.epicId,
+          totalTasks: epicTasks.total,
+          completedTasks,
+          progress,
+          epicStatus,
+        });
+
+        await databases.updateDocument(DATABASE_ID, EPICS_COLLECTION_ID, task.epicId, {
+          progress,
+          status: epicStatus,
+        });
+      }
+    }
+  } catch (error) {
+    console.error('Failed to update parent progress:', error);
+    // Don't throw - progress update is not critical
+  }
+}
 
 export function useTasks(projectId?: string) {
   return useQuery({
@@ -482,6 +558,16 @@ export function useUpdateTask() {
       queryClient.invalidateQueries({ queryKey: ['task', variables.taskId] });
       queryClient.invalidateQueries({ queryKey: ['tasks', variables.projectId] });
 
+      // ✅ Update FR and Epic progress if status changed
+      if (variables.updates.status) {
+        await updateParentProgress(updatedTask as unknown as Task);
+        // Invalidate FR and Epic queries to reflect progress
+        queryClient.invalidateQueries({
+          queryKey: ['functional-requirements', variables.projectId],
+        });
+        queryClient.invalidateQueries({ queryKey: ['epics', variables.projectId] });
+      }
+
       // ✅ AUTO-SYNC FR STATUS: If task is linked to FR and status changed, update FR status
       if (updatedTask.functionalRequirementId && variables.updates.status) {
         try {
@@ -688,8 +774,16 @@ export function useUpdateTaskStatus() {
       });
     },
     onSuccess: async (updatedTask, variables) => {
+      console.log('useUpdateTaskStatus onSuccess - updatedTask:', updatedTask);
+      
       // Silent success, already updated optimistically
       queryClient.invalidateQueries({ queryKey: ['tasks', variables.projectId] });
+
+      // ✅ Update FR and Epic progress based on task completion
+      await updateParentProgress(updatedTask as unknown as Task);
+      // Invalidate FR and Epic queries to reflect progress
+      queryClient.invalidateQueries({ queryKey: ['functional-requirements', variables.projectId] });
+      queryClient.invalidateQueries({ queryKey: ['epics', variables.projectId] });
 
       // Fetch project name for notifications
       let projectName = updatedTask.projectId;

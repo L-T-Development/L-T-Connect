@@ -96,16 +96,10 @@ export function LeaveApprovalCard({
               </CardDescription>
             </div>
             <div className="flex flex-col items-end gap-2">
-              <Badge
-                className={getLeaveStatusColor(leaveRequest.status)}
-                variant="outline"
-              >
+              <Badge className={getLeaveStatusColor(leaveRequest.status)} variant="outline">
                 {LEAVE_STATUS[leaveRequest.status]}
               </Badge>
-              <Badge
-                className={getLeaveTypeColor(leaveRequest.leaveType)}
-                variant="outline"
-              >
+              <Badge className={getLeaveTypeColor(leaveRequest.leaveType)} variant="outline">
                 {LEAVE_TYPES[leaveRequest.leaveType]}
               </Badge>
             </div>
@@ -151,9 +145,7 @@ export function LeaveApprovalCard({
                 {leaveRequest.approverComments}
               </p>
               {leaveRequest.approverName && (
-                <p className="text-xs text-muted-foreground">
-                  — {leaveRequest.approverName}
-                </p>
+                <p className="text-xs text-muted-foreground">— {leaveRequest.approverName}</p>
               )}
             </div>
           )}
@@ -181,8 +173,7 @@ export function LeaveApprovalCard({
           <CardFooter>
             <div className="text-xs text-muted-foreground w-full text-center">
               {isApproved ? 'Approved' : 'Rejected'} by {leaveRequest.approverName} on{' '}
-              {leaveRequest.approvedAt &&
-                new Date(leaveRequest.approvedAt).toLocaleDateString()}
+              {leaveRequest.approvedAt && new Date(leaveRequest.approvedAt).toLocaleDateString()}
             </div>
           </CardFooter>
         )}
@@ -195,8 +186,8 @@ export function LeaveApprovalCard({
             <DialogTitle>Approve Leave Request</DialogTitle>
             <DialogDescription>
               You are about to approve {leaveRequest.userName}'s leave request for{' '}
-              {leaveRequest.days} {leaveRequest.days === 1 ? 'day' : 'days'}. The employee
-              will be notified via email.
+              {leaveRequest.days} {leaveRequest.days === 1 ? 'day' : 'days'}. The employee will be
+              notified via email.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -240,8 +231,8 @@ export function LeaveApprovalCard({
           <DialogHeader>
             <DialogTitle>Reject Leave Request</DialogTitle>
             <DialogDescription>
-              You are about to reject {leaveRequest.userName}'s leave request. Please
-              provide a reason for rejection. The employee will be notified via email.
+              You are about to reject {leaveRequest.userName}'s leave request. Please provide a
+              reason for rejection. The employee will be notified via email.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -260,10 +251,11 @@ export function LeaveApprovalCard({
               </p>
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="flex-col-reverse sm:flex-row sm:justify-between sm:space-x-0">
             <Button
               type="button"
               variant="outline"
+              className="mt-2 sm:mt-0"
               onClick={() => {
                 setShowRejectDialog(false);
                 setRejectionReason('');

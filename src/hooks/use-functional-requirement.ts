@@ -4,12 +4,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { databases } from '@/lib/appwrite-client';
 import { ID, Query } from 'appwrite';
 import { toast } from '@/hooks/use-toast';
-import { 
-  generateFRId, 
-  generateFRIdWithEpicOnly, 
+import {
+  generateFRId,
+  generateFRIdWithEpicOnly,
   generateFRIdStandalone,
-  generateTaskId 
+  generateTaskId,
 } from '@/lib/hierarchy-id-generator';
+import { createBulkNotifications } from '@/hooks/use-notification';
 import type { FunctionalRequirement, FunctionalRequirementStatus, Task } from '@/types';
 
 const DATABASE_ID = process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!;
@@ -18,16 +19,17 @@ const TASKS_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_TASKS_COLLECTION_ID
 const PROJECTS_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_PROJECTS_COLLECTION_ID!;
 const SPRINTS_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_SPRINTS_COLLECTION_ID!;
 const EPICS_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_EPICS_COLLECTION_ID!;
-const CLIENT_REQUIREMENTS_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_CLIENT_REQUIREMENTS_COLLECTION_ID!;
+const CLIENT_REQUIREMENTS_COLLECTION_ID =
+  process.env.NEXT_PUBLIC_APPWRITE_CLIENT_REQUIREMENTS_COLLECTION_ID!;
 
 // ✅ Utility: Calculate FR status from linked tasks
 export function calculateFRStatusFromTasks(tasks: Task[]): FunctionalRequirement['status'] {
   if (!tasks || tasks.length === 0) return 'DRAFT';
 
-  const allDone = tasks.every(t => t.status === 'DONE');
-  const anyInProgress = tasks.some(t => t.status === 'IN_PROGRESS' || t.status === 'REVIEW');
-  const anyTodo = tasks.some(t => t.status === 'TODO');
-  
+  const allDone = tasks.every((t) => t.status === 'DONE');
+  const anyInProgress = tasks.some((t) => t.status === 'IN_PROGRESS' || t.status === 'REVIEW');
+  const anyTodo = tasks.some((t) => t.status === 'TODO');
+
   // FR lifecycle: DRAFT → REVIEW → APPROVED → IMPLEMENTED → TESTED → DEPLOYED
   if (allDone) {
     // All tasks done - mark as TESTED (ready for deployment)
@@ -51,14 +53,10 @@ export function useFunctionalRequirements(projectId?: string) {
     queryFn: async () => {
       if (!projectId) return [];
 
-      const response = await databases.listDocuments(
-        DATABASE_ID,
-        COLLECTION_ID,
-        [
-          Query.equal('projectId', projectId),
-          Query.orderDesc('$createdAt'),
-        ]
-      );
+      const response = await databases.listDocuments(DATABASE_ID, COLLECTION_ID, [
+        Query.equal('projectId', projectId),
+        Query.orderDesc('$createdAt'),
+      ]);
 
       return response.documents as unknown as FunctionalRequirement[];
     },
@@ -73,11 +71,7 @@ export function useFunctionalRequirement(requirementId?: string) {
     queryFn: async () => {
       if (!requirementId) return null;
 
-      const response = await databases.getDocument(
-        DATABASE_ID,
-        COLLECTION_ID,
-        requirementId
-      );
+      const response = await databases.getDocument(DATABASE_ID, COLLECTION_ID, requirementId);
 
       return response as unknown as FunctionalRequirement;
     },
@@ -92,14 +86,10 @@ export function useFunctionalRequirementsByEpic(epicId?: string) {
     queryFn: async () => {
       if (!epicId) return [];
 
-      const response = await databases.listDocuments(
-        DATABASE_ID,
-        COLLECTION_ID,
-        [
-          Query.equal('epicId', epicId),
-          Query.orderDesc('$createdAt'),
-        ]
-      );
+      const response = await databases.listDocuments(DATABASE_ID, COLLECTION_ID, [
+        Query.equal('epicId', epicId),
+        Query.orderDesc('$createdAt'),
+      ]);
 
       return response.documents as unknown as FunctionalRequirement[];
     },
@@ -114,14 +104,10 @@ export function useFunctionalRequirementsBySprint(sprintId?: string) {
     queryFn: async () => {
       if (!sprintId) return [];
 
-      const response = await databases.listDocuments(
-        DATABASE_ID,
-        COLLECTION_ID,
-        [
-          Query.equal('sprintId', sprintId),
-          Query.orderDesc('$createdAt'),
-        ]
-      );
+      const response = await databases.listDocuments(DATABASE_ID, COLLECTION_ID, [
+        Query.equal('sprintId', sprintId),
+        Query.orderDesc('$createdAt'),
+      ]);
 
       return response.documents as unknown as FunctionalRequirement[];
     },
@@ -170,27 +156,21 @@ export function useCreateFunctionalRequirement() {
         const parentHierarchyId = parent.hierarchyId;
 
         // Count siblings to determine the next number
-        const siblings = await databases.listDocuments(
-          DATABASE_ID,
-          COLLECTION_ID,
-          [
-            Query.equal('projectId', data.projectId),
-            Query.equal('parentRequirementId', data.parentRequirementId),
-          ]
-        );
+        const siblings = await databases.listDocuments(DATABASE_ID, COLLECTION_ID, [
+          Query.equal('projectId', data.projectId),
+          Query.equal('parentRequirementId', data.parentRequirementId),
+        ]);
 
         const childNumber = String(siblings.total + 1).padStart(2, '0');
         hierarchyId = `${parentHierarchyId}.${childNumber}`;
       } else {
         // Top-level requirement: Use hierarchical naming
         // Format: P{ProjCode}-R{ReqCode}-E{EpicCode}-FR{FRCode}-{Num}
-        
+
         // Count existing FRs for sequence number
-        const existingFRs = await databases.listDocuments(
-          DATABASE_ID,
-          COLLECTION_ID,
-          [Query.equal('projectId', data.projectId)]
-        );
+        const existingFRs = await databases.listDocuments(DATABASE_ID, COLLECTION_ID, [
+          Query.equal('projectId', data.projectId),
+        ]);
         const sequenceNumber = existingFRs.total + 1;
 
         // Fetch project details
@@ -205,16 +185,13 @@ export function useCreateFunctionalRequirement() {
         if (data.epicId) {
           // Has epic: Fetch epic and potentially requirement
           const EPICS_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_EPICS_COLLECTION_ID!;
-          const epic = await databases.getDocument(
-            DATABASE_ID,
-            EPICS_COLLECTION_ID,
-            data.epicId
-          );
+          const epic = await databases.getDocument(DATABASE_ID, EPICS_COLLECTION_ID, data.epicId);
           const epicName = epic.name || '';
 
           if (epic.requirementId) {
             // Has requirement through epic
-            const REQ_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_CLIENT_REQUIREMENTS_COLLECTION_ID!;
+            const REQ_COLLECTION_ID =
+              process.env.NEXT_PUBLIC_APPWRITE_CLIENT_REQUIREMENTS_COLLECTION_ID!;
             const requirement = await databases.getDocument(
               DATABASE_ID,
               REQ_COLLECTION_ID,
@@ -284,17 +261,59 @@ export function useCreateFunctionalRequirement() {
 
       return response as unknown as FunctionalRequirement;
     },
-    onSuccess: (_, variables) => {
+    onSuccess: async (createdFR, variables) => {
       queryClient.invalidateQueries({ queryKey: ['functional-requirements', variables.projectId] });
       if (variables.epicId) {
-        queryClient.invalidateQueries({ queryKey: ['functional-requirements', 'epic', variables.epicId] });
+        queryClient.invalidateQueries({
+          queryKey: ['functional-requirements', 'epic', variables.epicId],
+        });
       }
       if (variables.sprintId) {
-        queryClient.invalidateQueries({ queryKey: ['functional-requirements', 'sprint', variables.sprintId] });
+        queryClient.invalidateQueries({
+          queryKey: ['functional-requirements', 'sprint', variables.sprintId],
+        });
       }
       if (variables.clientRequirementId) {
-        queryClient.invalidateQueries({ queryKey: ['client-requirement', variables.clientRequirementId] });
+        queryClient.invalidateQueries({
+          queryKey: ['client-requirement', variables.clientRequirementId],
+        });
       }
+
+      // ✅ Send FR_CREATED notification to assigned team members
+      if (variables.assignedTo && variables.assignedTo.length > 0) {
+        try {
+          // Get project name for notification
+          let projectName = 'Project';
+          try {
+            const project = await databases.getDocument(
+              DATABASE_ID,
+              PROJECTS_COLLECTION_ID,
+              variables.projectId
+            );
+            projectName = project.name || 'Project';
+          } catch (error) {
+            console.error('Failed to get project name for notification:', error);
+          }
+
+          await createBulkNotifications({
+            workspaceId: variables.workspaceId,
+            userIds: variables.assignedTo,
+            type: 'FR_CREATED',
+            data: {
+              frId: createdFR.$id,
+              frTitle: createdFR.title,
+              frHierarchyId: createdFR.hierarchyId,
+              projectId: variables.projectId,
+              projectName,
+              creatorName: variables.createdByName || 'Team Member',
+              entityType: 'FR',
+            },
+          });
+        } catch (error) {
+          console.error('Failed to send FR creation notifications:', error);
+        }
+      }
+
       toast({
         title: 'Success',
         description: 'Functional requirement created successfully!',
@@ -303,7 +322,9 @@ export function useCreateFunctionalRequirement() {
     onError: (error: unknown) => {
       toast({
         title: 'Error',
-        description: (error instanceof Error ? error.message : String(error)) || 'Failed to create functional requirement',
+        description:
+          (error instanceof Error ? error.message : String(error)) ||
+          'Failed to create functional requirement',
         variant: 'destructive',
       });
     },
@@ -337,15 +358,13 @@ export function useUpdateFunctionalRequirement() {
 
       // ✅ AUTO-CREATE TASK when FR is assigned to sprint for the first time
       const isNewSprintAssignment = updates.sprintId && updates.sprintId !== previousSprintId;
-      
+
       if (isNewSprintAssignment && updates.sprintId) {
         try {
           // Get existing tasks to calculate position
-          const existingTasks = await databases.listDocuments(
-            DATABASE_ID,
-            TASKS_COLLECTION_ID,
-            [Query.equal('projectId', projectId)]
-          );
+          const existingTasks = await databases.listDocuments(DATABASE_ID, TASKS_COLLECTION_ID, [
+            Query.equal('projectId', projectId),
+          ]);
 
           const topLevelTasks = existingTasks.documents.filter((t: any) => !t.parentTaskId);
           const taskSequence = topLevelTasks.length + 1;
@@ -365,14 +384,16 @@ export function useUpdateFunctionalRequirement() {
             taskSequence
           );
 
-          // Create task linked to FR (storyPoints removed)
+          // Create task linked to FR - starts in BACKLOG until sprint is activated
+          // When sprint becomes ACTIVE, task will be moved to TODO
           const taskData = {
             workspaceId: updatedFR.workspaceId,
             projectId: projectId,
             hierarchyId,
             title: updatedFR.title,
-            description: updatedFR.description || `Task auto-created from FR: ${updatedFR.hierarchyId}`,
-            status: 'TODO' as const,
+            description:
+              updatedFR.description || `Task auto-created from FR: ${updatedFR.hierarchyId}`,
+            status: 'BACKLOG' as const, // ✅ Start in BACKLOG until sprint is activated
             priority: updatedFR.priority || 'MEDIUM',
             assignedTo: updatedFR.assignedTo || [],
             assignedToNames: updatedFR.assignedToNames || [],
@@ -383,7 +404,7 @@ export function useUpdateFunctionalRequirement() {
             dueDate: undefined,
             estimatedHours: 0,
             actualHours: 0,
-            sprintId: updates.sprintId,
+            sprintId: updates.sprintId, // ✅ Link to sprint
             epicId: updatedFR.epicId,
             functionalRequirementId: requirementId, // ✅ Link back to FR
             parentTaskId: undefined,
@@ -393,12 +414,7 @@ export function useUpdateFunctionalRequirement() {
             position: existingTasks.total,
           };
 
-          await databases.createDocument(
-            DATABASE_ID,
-            TASKS_COLLECTION_ID,
-            ID.unique(),
-            taskData
-          );
+          await databases.createDocument(DATABASE_ID, TASKS_COLLECTION_ID, ID.unique(), taskData);
 
           // Invalidate task queries to show new task
           queryClient.invalidateQueries({
@@ -424,16 +440,22 @@ export function useUpdateFunctionalRequirement() {
     },
     onSuccess: (result, variables) => {
       queryClient.invalidateQueries({ queryKey: ['functional-requirements', variables.projectId] });
-      queryClient.invalidateQueries({ queryKey: ['functional-requirement', variables.requirementId] });
-      
+      queryClient.invalidateQueries({
+        queryKey: ['functional-requirement', variables.requirementId],
+      });
+
       // ✅ Invalidate epic and sprint queries if those fields were updated
       if (result.epicId) {
-        queryClient.invalidateQueries({ queryKey: ['functional-requirements', 'epic', result.epicId] });
+        queryClient.invalidateQueries({
+          queryKey: ['functional-requirements', 'epic', result.epicId],
+        });
       }
       if (result.sprintId) {
-        queryClient.invalidateQueries({ queryKey: ['functional-requirements', 'sprint', result.sprintId] });
+        queryClient.invalidateQueries({
+          queryKey: ['functional-requirements', 'sprint', result.sprintId],
+        });
       }
-      
+
       toast({
         title: 'Success',
         description: 'Functional requirement updated successfully!',
@@ -442,7 +464,9 @@ export function useUpdateFunctionalRequirement() {
     onError: (error: unknown) => {
       toast({
         title: 'Error',
-        description: (error instanceof Error ? error.message : String(error)) || 'Failed to update functional requirement',
+        description:
+          (error instanceof Error ? error.message : String(error)) ||
+          'Failed to update functional requirement',
         variant: 'destructive',
       });
     },
@@ -456,11 +480,9 @@ export function useDeleteFunctionalRequirement() {
   return useMutation({
     mutationFn: async (data: { requirementId: string; projectId: string }) => {
       // Check for child requirements
-      const children = await databases.listDocuments(
-        DATABASE_ID,
-        COLLECTION_ID,
-        [Query.equal('parentRequirementId', data.requirementId)]
-      );
+      const children = await databases.listDocuments(DATABASE_ID, COLLECTION_ID, [
+        Query.equal('parentRequirementId', data.requirementId),
+      ]);
 
       if (children.total > 0) {
         throw new Error(
@@ -468,23 +490,35 @@ export function useDeleteFunctionalRequirement() {
         );
       }
 
-      await databases.deleteDocument(
-        DATABASE_ID,
-        COLLECTION_ID,
-        data.requirementId
+      // ✅ CASCADE DELETE: Delete all tasks linked to this FR
+      const linkedTasks = await databases.listDocuments(DATABASE_ID, TASKS_COLLECTION_ID, [
+        Query.equal('functionalRequirementId', data.requirementId),
+        Query.limit(100),
+      ]);
+
+      await Promise.all(
+        linkedTasks.documents.map((task) =>
+          databases.deleteDocument(DATABASE_ID, TASKS_COLLECTION_ID, task.$id)
+        )
       );
+
+      // Now delete the FR
+      await databases.deleteDocument(DATABASE_ID, COLLECTION_ID, data.requirementId);
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['functional-requirements', variables.projectId] });
+      queryClient.invalidateQueries({ queryKey: ['tasks', variables.projectId] });
       toast({
         title: 'Success',
-        description: 'Functional requirement deleted successfully!',
+        description: 'Functional requirement and linked tasks deleted successfully!',
       });
     },
     onError: (error: unknown) => {
       toast({
         title: 'Error',
-        description: (error instanceof Error ? error.message : String(error)) || 'Failed to delete functional requirement',
+        description:
+          (error instanceof Error ? error.message : String(error)) ||
+          'Failed to delete functional requirement',
         variant: 'destructive',
       });
     },
@@ -503,14 +537,20 @@ export function useCloneFunctionalRequirement() {
       targetEpicId?: string;
       targetClientRequirementId?: string;
     }) => {
-      const { requirementId, targetProjectId, targetProjectCode, targetEpicId, targetClientRequirementId } = data;
+      const {
+        requirementId,
+        targetProjectId,
+        targetProjectCode,
+        targetEpicId,
+        targetClientRequirementId,
+      } = data;
 
       // Fetch original FR
-      const originalFR = await databases.getDocument(
+      const originalFR = (await databases.getDocument(
         DATABASE_ID,
         COLLECTION_ID,
         requirementId
-      ) as unknown as FunctionalRequirement;
+      )) as unknown as FunctionalRequirement;
 
       // Get target project details for hierarchy generation
       const targetProject = await databases.getDocument(
@@ -520,17 +560,15 @@ export function useCloneFunctionalRequirement() {
       );
 
       // Get existing FRs in target project to calculate sequence
-      const existingFRs = await databases.listDocuments(
-        DATABASE_ID,
-        COLLECTION_ID,
-        [Query.equal('projectId', targetProjectId)]
-      );
+      const existingFRs = await databases.listDocuments(DATABASE_ID, COLLECTION_ID, [
+        Query.equal('projectId', targetProjectId),
+      ]);
 
       const frSequence = existingFRs.total + 1;
 
       // Generate new hierarchyId based on target project structure
       let newHierarchyId: string;
-      
+
       if (targetEpicId) {
         // If targeting an epic, fetch it and generate FR ID with epic
         const targetEpic = await databases.getDocument(
@@ -546,7 +584,7 @@ export function useCloneFunctionalRequirement() {
             CLIENT_REQUIREMENTS_COLLECTION_ID,
             targetClientRequirementId
           );
-          
+
           newHierarchyId = generateFRId(
             targetProjectCode,
             targetProject.name,
@@ -623,7 +661,9 @@ export function useCloneFunctionalRequirement() {
     onError: (error: unknown) => {
       toast({
         title: 'Error',
-        description: (error instanceof Error ? error.message : String(error)) || 'Failed to clone functional requirement',
+        description:
+          (error instanceof Error ? error.message : String(error)) ||
+          'Failed to clone functional requirement',
         variant: 'destructive',
       });
     },

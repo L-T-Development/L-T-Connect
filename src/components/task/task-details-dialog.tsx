@@ -130,25 +130,6 @@ export function TaskDetailsDialog({
               </div>
               <DialogTitle className="text-2xl">{task.title}</DialogTitle>
             </div>
-            <div className="flex gap-2">
-              {onEdit && (
-                <Button variant="outline" size="sm" onClick={() => onEdit(task)}>
-                  <Edit className="h-4 w-4 mr-1" />
-                  Edit
-                </Button>
-              )}
-              {onDelete && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => onDelete(task.$id)}
-                  className="text-destructive hover:text-destructive"
-                >
-                  <Trash2 className="h-4 w-4 mr-1" />
-                  Delete
-                </Button>
-              )}
-            </div>
           </div>
         </DialogHeader>
 
@@ -367,14 +348,20 @@ export function TaskDetailsDialog({
             </>
           )}
 
-          {/* Comments Section */}
           <Separator />
-          <div>
-            <div className="flex items-center gap-2 text-sm font-medium mb-4">
-              <MessageSquare className="h-4 w-4" />
-              Comments
-            </div>
-            <CommentSection entityId={task.$id} />
+          <div className="flex gap-4 w-full">
+            {onEdit && (
+              <Button variant="outline" onClick={() => onEdit(task)} className="w-full">
+                <Edit className="h-4 w-4 mr-1" />
+                Edit
+              </Button>
+            )}
+            {onDelete && (
+              <Button variant="destructive" onClick={() => onDelete(task.$id)} className="w-full">
+                <Trash2 className="h-4 w-4 mr-1" />
+                Delete
+              </Button>
+            )}
           </div>
         </div>
       </DialogContent>

@@ -29,10 +29,20 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Sparkles, FileText, CheckCircle2, Loader2, Upload, Target, ListTodo } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
-import { generateProjectHierarchy, analyzeDocument, type GeneratedHierarchy } from '@/lib/ai-generator';
+import {
+  generateProjectHierarchyUnified,
+  type GeneratedHierarchy,
+  type DocumentAnalysis,
+} from '@/lib/ai-generator';
 
 const formSchema = z.object({
-  documentText: z.string().min(50, 'Please provide at least 50 characters of requirements'),
+  documentText: z
+    .string()
+    .min(100, 'Please provide at least 100 characters for strong and accurate generation')
+    .refine(
+      (text) => text.trim().length >= 100,
+      'Meaningful content must be at least 100 characters (spaces excluded)'
+    ),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -47,17 +57,23 @@ interface AIGenerateDialogProps {
   onGenerated: (data: GeneratedHierarchy) => void;
 }
 
-type GenerationStep = 'input' | 'analyzing' | 'generating' | 'preview';
+type GenerationStep = 'input' | 'generating' | 'preview' | 'saving';
 
 export function AIGenerateDialog({
   open,
   onOpenChange,
+  projectId,
+  projectCode,
+  workspaceId,
+  userId,
   onGenerated,
 }: AIGenerateDialogProps) {
   const [step, setStep] = React.useState<GenerationStep>('input');
   const [progress, setProgress] = React.useState(0);
   const [generatedData, setGeneratedData] = React.useState<GeneratedHierarchy | null>(null);
-  const [analysis, setAnalysis] = React.useState<any>(null);
+  const [analysis, setAnalysis] = React.useState<DocumentAnalysis | null>(null);
+  const [charCount, setCharCount] = React.useState(0);
+  const [saveProgress, setSaveProgress] = React.useState(0);
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -79,8 +95,16 @@ export function AIGenerateDialog({
     if (!file) return;
 
     // Check file type
-    const validTypes = ['text/plain', 'application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
-    if (!validTypes.includes(file.type) && !file.name.endsWith('.txt') && !file.name.endsWith('.md')) {
+    const validTypes = [
+      'text/plain',
+      'application/pdf',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    ];
+    if (
+      !validTypes.includes(file.type) &&
+      !file.name.endsWith('.txt') &&
+      !file.name.endsWith('.md')
+    ) {
       toast({
         title: 'Invalid File Type',
         description: 'Please upload a .txt, .md, .pdf, or .docx file',
@@ -121,7 +145,8 @@ export function AIGenerateDialog({
     } catch (error: any) {
       toast({
         title: 'Error',
-        description: (error instanceof Error ? error.message : String(error)) || 'Failed to read file',
+        description:
+          (error instanceof Error ? error.message : String(error)) || 'Failed to read file',
         variant: 'destructive',
       });
     }
@@ -129,23 +154,25 @@ export function AIGenerateDialog({
 
   const onSubmit = async (values: FormData) => {
     try {
-      // Step 1: Analyze document
-      setStep('analyzing');
+      // Single AI call that generates everything at once (saves tokens!)
+      setStep('generating');
       setProgress(20);
 
-      const analysisResult = await analyzeDocument(values.documentText);
-      setAnalysis(analysisResult);
-      setProgress(40);
+      // Simulate progress while AI processes
+      const progressInterval = setInterval(() => {
+        setProgress((prev) => Math.min(prev + 10, 90));
+      }, 800);
 
-      // Step 2: Generate hierarchy
-      setStep('generating');
-      setProgress(60);
+      const generated = await generateProjectHierarchyUnified(values.documentText);
 
-      const generated = await generateProjectHierarchy(values.documentText);
-      setGeneratedData(generated);
+      clearInterval(progressInterval);
       setProgress(100);
 
-      // Step 3: Show preview
+      // Extract analysis from unified response
+      setAnalysis(generated.analysis);
+      setGeneratedData(generated);
+
+      // Show preview
       setStep('preview');
 
       toast({
@@ -155,7 +182,9 @@ export function AIGenerateDialog({
     } catch (error: any) {
       toast({
         title: 'Generation Failed',
-        description: (error instanceof Error ? error.message : String(error)) || 'Failed to generate project structure',
+        description:
+          (error instanceof Error ? error.message : String(error)) ||
+          'Failed to generate project structure',
         variant: 'destructive',
       });
       setStep('input');
@@ -163,11 +192,65 @@ export function AIGenerateDialog({
     }
   };
 
-  const handleConfirmGeneration = () => {
-    if (generatedData) {
+  const handleConfirmGeneration = async () => {
+    if (!generatedData || !projectId || !workspaceId || !userId) return;
+
+    setStep('saving');
+    setSaveProgress(10);
+
+    try {
+      // Simulate progress during API call
+      const progressInterval = setInterval(() => {
+        setSaveProgress((prev) => Math.min(prev + 10, 90));
+      }, 500);
+
+      const response = await fetch('/api/bulk-save', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          generated: generatedData,
+          projectId,
+          projectCode,
+          workspaceId,
+          userId,
+        }),
+      });
+
+      clearInterval(progressInterval);
+      setSaveProgress(100);
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to save generated data');
+      }
+
+      // Call onGenerated callback for any additional handling
       onGenerated(generatedData);
+
+      // Show success toast with counts
+      toast({
+        title: 'Successfully Saved!',
+        description: `Added ${data.result.clientRequirements.length} client requirements, ${data.result.functionalRequirements.length} FRs, ${data.result.epics.length} epics, and ${data.result.tasks.length} tasks`,
+      });
+
+      // Close dialog and reset
       onOpenChange(false);
       resetDialog();
+
+      // Refresh the page to show new data
+      window.location.reload();
+    } catch (error: any) {
+      toast({
+        title: 'Save Failed',
+        description: error instanceof Error ? error.message : 'Failed to save generated data',
+        variant: 'destructive',
+      });
+      // Go back to preview on error so user can retry
+      setStep('preview');
+      setSaveProgress(0);
     }
   };
 
@@ -177,10 +260,13 @@ export function AIGenerateDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={(open) => {
-      if (!open) resetDialog();
-      onOpenChange(open);
-    }}>
+    <Dialog
+      open={open}
+      onOpenChange={(open) => {
+        if (!open) resetDialog();
+        onOpenChange(open);
+      }}
+    >
       <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -188,7 +274,8 @@ export function AIGenerateDialog({
             AI-Powered Project Generation
           </DialogTitle>
           <DialogDescription>
-            Paste your requirements or upload a document, and AI will generate the complete project structure
+            Paste your requirements or upload a document, and AI will generate the complete project
+            structure
           </DialogDescription>
         </DialogHeader>
 
@@ -231,11 +318,23 @@ Example:
 We need a mobile app for our e-commerce business that allows customers to browse products, add to cart, make payments, and track orders. The app should support both iOS and Android platforms..."
                         className="min-h-[300px] font-mono text-sm"
                         {...field}
+                        onChange={(e) => {
+                          field.onChange(e);
+                          setCharCount(e.target.value.length);
+                        }}
                       />
                     </FormControl>
-                    <FormDescription>
-                      Minimum 50 characters. Be as detailed as possible for better results.
-                    </FormDescription>
+                    <div className="flex justify-between items-start">
+                      <FormDescription>
+                        Minimum 100 characters for strong and accurate generation. Include specific
+                        details about features, requirements, and business goals.
+                      </FormDescription>
+                      <span
+                        className={`text-sm font-medium ${charCount >= 100 ? 'text-green-600' : charCount >= 50 ? 'text-yellow-600' : 'text-red-600'}`}
+                      >
+                        {charCount} / 100
+                      </span>
+                    </div>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -255,7 +354,7 @@ We need a mobile app for our e-commerce business that allows customers to browse
           </Form>
         )}
 
-        {(step === 'analyzing' || step === 'generating') && (
+        {step === 'generating' && (
           <div className="space-y-6 py-8">
             <div className="flex flex-col items-center justify-center space-y-4">
               <div className="relative">
@@ -263,18 +362,38 @@ We need a mobile app for our e-commerce business that allows customers to browse
                 <Sparkles className="h-8 w-8 text-yellow-500 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" />
               </div>
               <div className="text-center space-y-2">
-                <h3 className="text-lg font-semibold">
-                  {step === 'analyzing' ? 'Analyzing Document...' : 'Generating Project Structure...'}
-                </h3>
+                <h3 className="text-lg font-semibold">Generating Project Structure...</h3>
                 <p className="text-sm text-muted-foreground">
-                  {step === 'analyzing'
-                    ? 'AI is understanding your requirements'
-                    : 'Creating client requirements, functional specs, epics, and tasks'}
+                  AI is analyzing and creating requirements, epics, and tasks in one pass
                 </p>
               </div>
               <div className="w-full max-w-md space-y-2">
                 <Progress value={progress} className="h-2" />
                 <p className="text-xs text-center text-muted-foreground">{progress}%</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {step === 'saving' && (
+          <div className="space-y-6 py-8">
+            <div className="flex flex-col items-center justify-center space-y-4">
+              <div className="relative">
+                <Loader2 className="h-16 w-16 text-green-500 animate-spin" />
+                <CheckCircle2 className="h-8 w-8 text-green-300 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" />
+              </div>
+              <div className="text-center space-y-2">
+                <h3 className="text-lg font-semibold">Saving to Database...</h3>
+                <p className="text-sm text-muted-foreground">
+                  Creating {generatedData?.clientRequirements.length || 0} client requirements,{' '}
+                  {generatedData?.functionalRequirements.length || 0} FRs,{' '}
+                  {generatedData?.epics.length || 0} epics, and {generatedData?.tasks.length || 0}{' '}
+                  tasks
+                </p>
+              </div>
+              <div className="w-full max-w-md space-y-2">
+                <Progress value={saveProgress} className="h-2" />
+                <p className="text-xs text-center text-muted-foreground">{saveProgress}%</p>
               </div>
             </div>
           </div>
@@ -295,8 +414,12 @@ We need a mobile app for our e-commerce business that allows customers to browse
                 <div className="flex flex-wrap gap-2">
                   <Badge variant="outline">Complexity: {analysis.complexity}</Badge>
                   <Badge variant="outline">Duration: {analysis.estimatedDuration}</Badge>
-                  <Badge variant="outline">Team Size: {analysis.recommendedTeamSize} developers</Badge>
-                  <Badge variant="outline">Duration: {generatedData.timeline.projectDuration}</Badge>
+                  <Badge variant="outline">
+                    Team Size: {analysis.recommendedTeamSize} developers
+                  </Badge>
+                  <Badge variant="outline">
+                    Duration: {generatedData.timeline.projectDuration}
+                  </Badge>
                 </div>
               </CardContent>
             </Card>
@@ -320,9 +443,7 @@ We need a mobile app for our e-commerce business that allows customers to browse
                   <CheckCircle2 className="h-4 w-4 mr-1" />
                   Tasks ({generatedData.tasks.length})
                 </TabsTrigger>
-                <TabsTrigger value="timeline">
-                  Timeline
-                </TabsTrigger>
+                <TabsTrigger value="timeline">Timeline</TabsTrigger>
               </TabsList>
 
               <ScrollArea className="h-[400px] mt-4">
@@ -334,7 +455,9 @@ We need a mobile app for our e-commerce business that allows customers to browse
                           {req.title}
                           <Badge>{req.priority}</Badge>
                         </CardTitle>
-                        <CardDescription className="text-xs">Client: {req.clientName}</CardDescription>
+                        <CardDescription className="text-xs">
+                          Client: {req.clientName}
+                        </CardDescription>
                       </CardHeader>
                       <CardContent>
                         <p className="text-sm text-muted-foreground">{req.description}</p>
@@ -354,7 +477,9 @@ We need a mobile app for our e-commerce business that allows customers to browse
                             <Badge>{req.priority}</Badge>
                           </div>
                         </CardTitle>
-                        <CardDescription className="text-xs">Complexity: {req.complexity}</CardDescription>
+                        <CardDescription className="text-xs">
+                          Complexity: {req.complexity}
+                        </CardDescription>
                       </CardHeader>
                       <CardContent className="space-y-2">
                         <p className="text-sm text-muted-foreground">{req.description}</p>
@@ -378,7 +503,10 @@ We need a mobile app for our e-commerce business that allows customers to browse
                     <Card key={idx}>
                       <CardHeader>
                         <CardTitle className="text-sm flex items-center gap-2">
-                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: epic.color }} />
+                          <div
+                            className="w-3 h-3 rounded-full"
+                            style={{ backgroundColor: epic.color }}
+                          />
                           {epic.name}
                         </CardTitle>
                         <CardDescription className="text-xs">
@@ -424,7 +552,9 @@ We need a mobile app for our e-commerce business that allows customers to browse
                   <Card>
                     <CardHeader>
                       <CardTitle className="text-base">Project Timeline</CardTitle>
-                      <CardDescription>Duration: {generatedData.timeline.projectDuration}</CardDescription>
+                      <CardDescription>
+                        Duration: {generatedData.timeline.projectDuration}
+                      </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-3">
                       {generatedData.timeline.milestones.map((milestone, idx) => (
@@ -433,7 +563,9 @@ We need a mobile app for our e-commerce business that allows customers to browse
                           <div className="flex-1">
                             <div className="font-medium text-sm">{milestone.name}</div>
                             <div className="text-xs text-muted-foreground">{milestone.date}</div>
-                            <div className="text-sm text-muted-foreground mt-1">{milestone.description}</div>
+                            <div className="text-sm text-muted-foreground mt-1">
+                              {milestone.description}
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -452,7 +584,11 @@ We need a mobile app for our e-commerce business that allows customers to browse
                 <Button type="button" variant="outline" onClick={() => setStep('input')}>
                   Regenerate
                 </Button>
-                <Button type="button" onClick={handleConfirmGeneration} className="bg-green-600 hover:bg-green-700">
+                <Button
+                  type="button"
+                  onClick={handleConfirmGeneration}
+                  className="bg-green-600 hover:bg-green-700"
+                >
                   <CheckCircle2 className="mr-2 h-4 w-4" />
                   Confirm & Save All
                 </Button>

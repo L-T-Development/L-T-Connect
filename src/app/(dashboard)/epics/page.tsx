@@ -6,7 +6,6 @@ import { useCurrentWorkspace } from '@/hooks/use-current-workspace';
 import { useProjects } from '@/hooks/use-project';
 import { useEpics } from '@/hooks/use-epic';
 import { useTasks } from '@/hooks/use-task';
-import { useFunctionalRequirements } from '@/hooks/use-functional-requirement';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -23,17 +22,27 @@ import { formatDate } from '@/lib/utils';
 import type { Epic } from '@/types';
 import { CreateEpicDialog } from '@/components/epic/create-epic-dialog';
 import { EpicDetailDialog } from '@/components/epic/epic-detail-dialog';
+import { useIsAdmin, useHasPermission } from '@/hooks/use-permissions';
+import { Permission } from '@/lib/permissions';
 
-const statusConfig: Record<Epic['status'], { label: string; color: string }> = {
-  TODO: { label: 'To Do', color: 'bg-gray-500' },
-  IN_PROGRESS: { label: 'In Progress', color: 'bg-blue-500' },
-  DONE: { label: 'Done', color: 'bg-green-500' },
+const statusConfig: Record<
+  Epic['status'],
+  { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }
+> = {
+  TODO: { label: 'To Do', variant: 'secondary' },
+  IN_PROGRESS: { label: 'In Progress', variant: 'default' },
+  DONE: { label: 'Done', variant: 'default' },
 };
 
 export default function EpicsPage() {
   const { user } = useAuth();
   const { currentWorkspace } = useCurrentWorkspace();
   const { data: projects = [] } = useProjects(currentWorkspace?.$id);
+
+  // Permission checks
+  const isAdmin = useIsAdmin();
+  const canCreateEpic = useHasPermission(Permission.CREATE_EPIC);
+  const canDeleteEpic = useHasPermission(Permission.DELETE_EPIC);
 
   const [selectedProjectId, setSelectedProjectId] = React.useState<string>('');
   const [createDialogOpen, setCreateDialogOpen] = React.useState(false);
@@ -44,7 +53,7 @@ export default function EpicsPage() {
     const STORAGE_KEY = 'selected-project-id';
     const savedProjectId = localStorage.getItem(STORAGE_KEY);
 
-    if (savedProjectId && projects.some(p => p.$id === savedProjectId)) {
+    if (savedProjectId && projects.some((p) => p.$id === savedProjectId)) {
       // Restore saved project if it still exists
       setSelectedProjectId(savedProjectId);
     } else if (projects.length > 0 && !selectedProjectId) {
@@ -63,41 +72,31 @@ export default function EpicsPage() {
 
   const { data: epics = [], isLoading } = useEpics(selectedProjectId);
   const { data: tasks = [] } = useTasks(selectedProjectId);
-  const { data: functionalRequirements = [] } = useFunctionalRequirements(selectedProjectId);
 
   // Calculate stats
   const stats = React.useMemo(() => {
     return {
       total: epics.length,
-      todo: epics.filter(e => e.status === 'TODO').length,
-      inProgress: epics.filter(e => e.status === 'IN_PROGRESS').length,
-      done: epics.filter(e => e.status === 'DONE').length,
+      todo: epics.filter((e) => e.status === 'TODO').length,
+      inProgress: epics.filter((e) => e.status === 'IN_PROGRESS').length,
+      done: epics.filter((e) => e.status === 'DONE').length,
     };
   }, [epics]);
 
   // Calculate epic metrics
   const getEpicMetrics = (epic: Epic) => {
-    // First, try to calculate progress from linked FRs
-    const linkedFRs = functionalRequirements.filter(fr => fr.epicId === epic.$id);
-
-    let progress = 0;
-
-    if (linkedFRs.length > 0) {
-      // Calculate based on FR completion
-      const completedFRs = linkedFRs.filter(fr =>
-        fr.status === 'TESTED' || fr.status === 'DEPLOYED'
-      ).length;
-      progress = Math.round((completedFRs / linkedFRs.length) * 100);
-    } else {
-      // Fallback to task-based calculation
-      const epicTasks = tasks.filter(t => t.epicId === epic.$id);
-      const completedTasks = epicTasks.filter(t => t.status === 'DONE').length;
-      progress = epicTasks.length > 0 ? Math.round((completedTasks / epicTasks.length) * 100) : 0;
-    }
-
     // Calculate task metrics for display
-    const epicTasks = tasks.filter(t => t.epicId === epic.$id);
-    const completedTasks = epicTasks.filter(t => t.status === 'DONE').length;
+    const epicTasks = tasks.filter((t) => t.epicId === epic.$id);
+    const completedTasks = epicTasks.filter((t) => t.status === 'DONE').length;
+
+    // Use stored progress from database if available (updated when tasks change)
+    // Otherwise calculate from tasks directly
+    let progress = epic.progress ?? 0;
+
+    // If no stored progress, calculate it
+    if (progress === 0 && epicTasks.length > 0) {
+      progress = Math.round((completedTasks / epicTasks.length) * 100);
+    }
 
     return {
       totalTasks: epicTasks.length,
@@ -106,7 +105,7 @@ export default function EpicsPage() {
     };
   };
 
-  const selectedProject = projects.find(p => p.$id === selectedProjectId);
+  const selectedProject = projects.find((p) => p.$id === selectedProjectId);
 
   return (
     <div className="space-y-6">
@@ -114,14 +113,14 @@ export default function EpicsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Epics</h1>
-          <p className="text-muted-foreground">
-            Large features spanning multiple sprints
-          </p>
+          <p className="text-muted-foreground">Large features spanning multiple sprints</p>
         </div>
-        <Button onClick={() => setCreateDialogOpen(true)} disabled={!selectedProjectId}>
-          <Plus className="mr-2 h-4 w-4" />
-          New Epic
-        </Button>
+        {(canCreateEpic || isAdmin) && (
+          <Button onClick={() => setCreateDialogOpen(true)} disabled={!selectedProjectId}>
+            <Plus className="mr-2 h-4 w-4" />
+            New Epic
+          </Button>
+        )}
       </div>
 
       {/* Project Selector */}
@@ -200,10 +199,12 @@ export default function EpicsPage() {
               <div className="col-span-full text-center py-12">
                 <Target className="mx-auto h-12 w-12 text-muted-foreground opacity-50 mb-4" />
                 <p className="text-muted-foreground mb-4">No epics yet</p>
-                <Button onClick={() => setCreateDialogOpen(true)}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Create First Epic
-                </Button>
+                {(canCreateEpic || isAdmin) && (
+                  <Button onClick={() => setCreateDialogOpen(true)}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Create First Epic
+                  </Button>
+                )}
               </div>
             ) : (
               epics.map((epic) => {
@@ -237,7 +238,7 @@ export default function EpicsPage() {
                       {/* Status */}
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-muted-foreground">Status</span>
-                        <Badge className={status.color}>{status.label}</Badge>
+                        <Badge variant={status.variant}>{status.label}</Badge>
                       </div>
 
                       {/* Progress */}
@@ -294,7 +295,8 @@ export default function EpicsPage() {
           open={!!selectedEpic}
           onOpenChange={(open: boolean) => !open && setSelectedEpic(null)}
           projectId={selectedProjectId}
-          tasks={tasks.filter(t => t.epicId === selectedEpic.$id)}
+          tasks={tasks.filter((t) => t.epicId === selectedEpic.$id)}
+          canDelete={canDeleteEpic || isAdmin}
         />
       )}
     </div>

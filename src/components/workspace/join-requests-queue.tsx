@@ -73,7 +73,7 @@ export function JoinRequestsQueue({
       return;
     }
 
-    const selectedRole = roles.find(r => r.$id === selectedRoleId);
+    const selectedRole = roles.find((r) => r.$id === selectedRoleId);
     if (!selectedRole) {
       toast.error('Selected role not found');
       return;
@@ -104,7 +104,7 @@ export function JoinRequestsQueue({
       toast.success(`Approved join request from ${selectedRequest.userName}`, {
         description: `User has been added with ${selectedRole.name} role.`,
       });
-      
+
       setApproveDialogOpen(false);
       setSelectedRequest(null);
       setSelectedRoleId('');
@@ -150,7 +150,13 @@ export function JoinRequestsQueue({
     }
   };
 
-  const RequestCard = ({ request, showActions = true }: { request: JoinRequest; showActions?: boolean }) => (
+  const RequestCard = ({
+    request,
+    showActions = true,
+  }: {
+    request: JoinRequest;
+    showActions?: boolean;
+  }) => (
     <Card key={request.$id}>
       <CardContent className="p-6">
         <div className="flex items-start justify-between gap-4">
@@ -183,7 +189,8 @@ export function JoinRequestsQueue({
                 <div className="flex items-center gap-1">
                   <Clock className="h-3 w-3" />
                   <span>
-                    Requested {formatDistanceToNow(new Date(request.requestedAt), { addSuffix: true })}
+                    Requested{' '}
+                    {formatDistanceToNow(new Date(request.requestedAt), { addSuffix: true })}
                   </span>
                 </div>
                 {request.processedAt && (
@@ -194,7 +201,9 @@ export function JoinRequestsQueue({
                       <XCircle className="h-3 w-3 text-destructive" />
                     )}
                     <span>
-                      {request.status === 'APPROVED' ? 'Approved' : 'Rejected'} by {request.processorName} {formatDistanceToNow(new Date(request.processedAt), { addSuffix: true })}
+                      {request.status === 'APPROVED' ? 'Approved' : 'Rejected'} by{' '}
+                      {request.processorName}{' '}
+                      {formatDistanceToNow(new Date(request.processedAt), { addSuffix: true })}
                     </span>
                   </div>
                 )}
@@ -273,15 +282,9 @@ export function JoinRequestsQueue({
         <CardContent>
           <Tabs defaultValue="pending" className="space-y-4">
             <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="pending">
-                Pending ({pendingRequests.length})
-              </TabsTrigger>
-              <TabsTrigger value="approved">
-                Approved ({approvedRequests.length})
-              </TabsTrigger>
-              <TabsTrigger value="rejected">
-                Rejected ({rejectedRequests.length})
-              </TabsTrigger>
+              <TabsTrigger value="pending">Pending ({pendingRequests.length})</TabsTrigger>
+              <TabsTrigger value="approved">Approved ({approvedRequests.length})</TabsTrigger>
+              <TabsTrigger value="rejected">Rejected ({rejectedRequests.length})</TabsTrigger>
             </TabsList>
 
             <TabsContent value="pending" className="space-y-4">
@@ -445,10 +448,11 @@ export function JoinRequestsQueue({
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="flex-col-reverse sm:flex-row sm:justify-between sm:space-x-0">
             <Button
               type="button"
               variant="outline"
+              className="mt-2 sm:mt-0"
               onClick={() => setRejectDialogOpen(false)}
               disabled={rejectRequest.isPending}
             >
