@@ -1,0 +1,16 @@
+name: CI - Dev Branch
+
+on:
+  push:
+    branches: [ dev ]
+  pull_request:
+    branches: [ dev ]
+
+jobs:
+  ci-dev:
+    uses: ./.github/workflows/reusable-template.yml
+    with:
+      branch_name: "dev"
+    secrets:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
