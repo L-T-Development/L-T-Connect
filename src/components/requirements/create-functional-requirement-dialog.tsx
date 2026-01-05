@@ -84,6 +84,10 @@ export function CreateFunctionalRequirementDialog({
   });
 
   const onSubmit = async (values: FormData) => {
+    // ✅ FIX: Get client requirement ID from the selected epic's requirementId
+    const selectedEpic = epics.find((e) => e.$id === values.epicId);
+    const clientReqId = selectedEpic?.requirementId || '';
+
     await createRequirement.mutateAsync({
       projectId,
       projectCode,
@@ -96,7 +100,8 @@ export function CreateFunctionalRequirementDialog({
       complexity: values.complexity,
       status: 'DRAFT',
       epicId: values.epicId, // ✅ FIXED: Epic is now mandatory
-      clientRequirementId: values.parentRequirementId,
+      clientRequirementId: clientReqId, // ✅ FIX: Derived from epic's linked client requirement
+      parentRequirementId: values.parentRequirementId, // For sub-requirements
       reusable: values.isReusable || false,
     });
 
@@ -105,7 +110,7 @@ export function CreateFunctionalRequirementDialog({
   };
 
   // Filter parent requirements (only top-level for now)
-  const parentRequirements = functionalRequirements.filter(fr => !fr.clientRequirementId);
+  const parentRequirements = functionalRequirements.filter((fr) => !fr.clientRequirementId);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -224,9 +229,7 @@ export function CreateFunctionalRequirementDialog({
                       <SelectItem value="VERY_HIGH">Very High</SelectItem>
                     </SelectContent>
                   </Select>
-                  <FormDescription>
-                    Estimated implementation complexity
-                  </FormDescription>
+                  <FormDescription>Estimated implementation complexity</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -239,8 +242,8 @@ export function CreateFunctionalRequirementDialog({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Link to Epic *</FormLabel>
-                  <Select 
-                    onValueChange={(value) => field.onChange(value === 'none' ? '' : value)} 
+                  <Select
+                    onValueChange={(value) => field.onChange(value === 'none' ? '' : value)}
                     value={field.value || 'none'}
                   >
                     <FormControl>
@@ -283,8 +286,8 @@ export function CreateFunctionalRequirementDialog({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Parent Requirement (Optional)</FormLabel>
-                    <Select 
-                      onValueChange={(value) => field.onChange(value === 'none' ? '' : value)} 
+                    <Select
+                      onValueChange={(value) => field.onChange(value === 'none' ? '' : value)}
                       value={field.value || 'none'}
                     >
                       <FormControl>
@@ -317,10 +320,7 @@ export function CreateFunctionalRequirementDialog({
               render={({ field }) => (
                 <FormItem className="flex flex-row items-start space-x-3 space-y-0">
                   <FormControl>
-                    <Checkbox
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                    />
+                    <Checkbox checked={field.value} onCheckedChange={field.onChange} />
                   </FormControl>
                   <div className="space-y-1 leading-none">
                     <FormLabel>Reusable Requirement</FormLabel>

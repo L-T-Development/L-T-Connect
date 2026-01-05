@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Calendar, Info } from 'lucide-react';
+import { Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -10,7 +10,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -31,14 +30,17 @@ import {
   validateLeaveDates,
   hasEnoughBalance,
 } from '@/lib/leave-utils';
+import { getBalanceFieldForLeaveType } from '@/lib/leave-balance-mapper';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface LeaveRequestFormProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   userId: string;
+  workspaceId: string;
 }
 
-export function LeaveRequestForm({ userId }: LeaveRequestFormProps) {
-  const [open, setOpen] = React.useState(false);
+export function LeaveRequestForm({ open, onOpenChange, userId, workspaceId }: LeaveRequestFormProps) {
   const [leaveType, setLeaveType] = React.useState<LeaveType>('CASUAL');
   const [startDate, setStartDate] = React.useState('');
   const [endDate, setEndDate] = React.useState('');
@@ -48,25 +50,44 @@ export function LeaveRequestForm({ userId }: LeaveRequestFormProps) {
   const [validationError, setValidationError] = React.useState('');
 
   const createLeaveRequest = useCreateLeaveRequest();
-  const { data: leaveBalance } = useLeaveBalance(userId);
+  const { data: leaveBalance } = useLeaveBalance(userId, workspaceId);
 
   // Calculate days when dates change
   const calculatedDays = React.useMemo(() => {
     if (!startDate || !endDate) return 0;
-    return calculateLeaveDays(startDate, endDate, halfDay);
-  }, [startDate, endDate, halfDay]);
+    return calculateLeaveDays(startDate, endDate, halfDay, leaveType);
+  }, [startDate, endDate, halfDay, leaveType]);
+
+  // Reset halfDay when leave type changes to non-HALF_DAY
+  React.useEffect(() => {
+    if (leaveType !== 'HALF_DAY') {
+      setHalfDay(false);
+    }
+  }, [leaveType]);
+
+  // Get available balance for selected leave type using the mapper
+  const availableBalance = React.useMemo(() => {
+    if (!leaveBalance) return 0;
+    
+    // Use mapper to get correct DB field
+    const balanceField = getBalanceFieldForLeaveType(leaveType);
+    return leaveBalance[balanceField] || 0;
+  }, [leaveBalance, leaveType]);
 
   // Check if user has enough balance
   const sufficientBalance = React.useMemo(() => {
-    if (!leaveBalance?.leaveBalances || calculatedDays === 0) return true;
-    return hasEnoughBalance(leaveType, calculatedDays, leaveBalance.leaveBalances);
-  }, [leaveType, calculatedDays, leaveBalance?.leaveBalances]);
-
-  // Get available balance for selected leave type
-  const availableBalance = React.useMemo(() => {
-    if (!leaveBalance?.leaveBalances) return 0;
-    return leaveBalance.leaveBalances[leaveType] || 0;
-  }, [leaveBalance?.leaveBalances, leaveType]);
+    if (!leaveBalance || calculatedDays === 0) return true;
+    
+    // Use mapper-aware balance checking
+    const dbBalance = {
+      paidLeave: leaveBalance.paidLeave || 0,
+      unpaidLeave: leaveBalance.unpaidLeave || 0,
+      halfDay: leaveBalance.halfDay || 0,
+      compOff: leaveBalance.compOff || 0,
+    };
+    
+    return hasEnoughBalance(leaveType, calculatedDays, dbBalance);
+  }, [leaveType, calculatedDays, leaveBalance]);
 
   // Validate dates
   React.useEffect(() => {
@@ -99,6 +120,7 @@ export function LeaveRequestForm({ userId }: LeaveRequestFormProps) {
     }
 
     await createLeaveRequest.mutateAsync({
+      workspaceId,
       userId,
       leaveType,
       startDate,
@@ -116,7 +138,7 @@ export function LeaveRequestForm({ userId }: LeaveRequestFormProps) {
     setHalfDay(false);
     setEmergencyContact('');
     setValidationError('');
-    setOpen(false);
+    onOpenChange(false);
   };
 
   // Get minimum date (today)
@@ -130,13 +152,7 @@ export function LeaveRequestForm({ userId }: LeaveRequestFormProps) {
     .split('T')[0];
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button>
-          <Calendar className="mr-2 h-4 w-4" />
-          Request Leave
-        </Button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Request Leave</DialogTitle>
@@ -206,8 +222,8 @@ export function LeaveRequestForm({ userId }: LeaveRequestFormProps) {
               </div>
             </div>
 
-            {/* Half Day Option */}
-            {startDate && endDate && startDate === endDate && (
+            {/* Half Day Option - Only for HALF_DAY leave type */}
+            {startDate && endDate && startDate === endDate && leaveType === 'HALF_DAY' && (
               <div className="flex items-center space-x-2">
                 <Checkbox
                   id="halfDay"
@@ -288,7 +304,7 @@ export function LeaveRequestForm({ userId }: LeaveRequestFormProps) {
               type="button"
               variant="outline"
               onClick={() => {
-                setOpen(false);
+                onOpenChange(false);
                 setValidationError('');
               }}
             >

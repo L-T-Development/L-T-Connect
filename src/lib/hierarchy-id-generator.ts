@@ -1,14 +1,17 @@
 /**
  * Utility functions for generating hierarchical IDs
- * Format: PTE-RAU-EAU-FRL-SS1-TT1
- * 
+ *
+ * NEW Format: {ProjectCode}-{CRCode}-{EpicCode}-{FRCode}-{Number}
+ * Example: PTES-RAU-EAU-FRL-01
+ *
  * Structure:
- * - P{ProjectCode} = Project prefix + first 2 chars of name
- * - R{RequirementCode} = Requirement prefix + first 2 chars of name
- * - E{EpicCode} = Epic prefix + first 2 chars of name
- * - FR{FRCode} = Functional Requirement prefix + first char of name
- * - S{SprintCode} = Sprint prefix + sprint name/number
- * - T{TaskCode} = Task prefix + task name/number
+ * - {ProjectCode} = Project short code (e.g., PTES)
+ * - {CRCode} = Client Requirement code - first 3 chars of name (e.g., RAU from "Requirement Auto")
+ * - {EpicCode} = Epic code - first 3 chars of name (e.g., EAU from "Epic Auto")
+ * - {FRCode} = FR code - first 3 chars of name (e.g., FRL from "FR Login")
+ * - {Number} = Sequence number (01, 02, etc.)
+ *
+ * This format allows reusing the same requirements/modules across related tasks.
  */
 
 /**
@@ -31,8 +34,8 @@ export function generateProjectCode(projectName: string): string {
 
 /**
  * Generate requirement hierarchical ID
- * Format: P{ProjectCode}-R{ReqCode}-{Number}
- * Example: "PTE-RAU-01"
+ * Format: {ProjectCode}-{ReqCode}-{Number}
+ * Example: "PTES-RAU-01"
  */
 export function generateRequirementId(
   projectCode: string,
@@ -40,16 +43,16 @@ export function generateRequirementId(
   requirementName: string,
   sequenceNumber: number
 ): string {
-  const projCode = projectCode || extractChars(projectName, 2);
-  const reqCode = extractChars(requirementName, 2);
+  const projCode = projectCode || extractChars(projectName, 4);
+  const reqCode = extractChars(requirementName, 3);
   const seqNum = sequenceNumber.toString().padStart(2, '0');
-  return `P${projCode}-R${reqCode}-${seqNum}`;
+  return `${projCode}-${reqCode}-${seqNum}`;
 }
 
 /**
  * Generate epic hierarchical ID
- * Format: P{ProjectCode}-R{ReqCode}-E{EpicCode}-{Number}
- * Example: "PTE-RAU-EAU-01"
+ * Format: {ProjectCode}-{ReqCode}-{EpicCode}-{Number}
+ * Example: "PTES-RAU-EAU-01"
  */
 export function generateEpicId(
   projectCode: string,
@@ -58,17 +61,17 @@ export function generateEpicId(
   epicName: string,
   sequenceNumber: number
 ): string {
-  const projCode = projectCode || extractChars(projectName, 2);
-  const reqCode = extractChars(requirementName, 2);
-  const epicCode = extractChars(epicName, 2);
+  const projCode = projectCode || extractChars(projectName, 4);
+  const reqCode = extractChars(requirementName, 3);
+  const epicCode = extractChars(epicName, 3);
   const seqNum = sequenceNumber.toString().padStart(2, '0');
-  return `P${projCode}-R${reqCode}-E${epicCode}-${seqNum}`;
+  return `${projCode}-${reqCode}-${epicCode}-${seqNum}`;
 }
 
 /**
  * Generate epic hierarchical ID (when no requirement)
- * Format: P{ProjectCode}-E{EpicCode}-{Number}
- * Example: "PTE-EAU-01"
+ * Format: {ProjectCode}-{EpicCode}-{Number}
+ * Example: "PTES-EAU-01"
  */
 export function generateEpicIdWithoutRequirement(
   projectCode: string,
@@ -76,16 +79,18 @@ export function generateEpicIdWithoutRequirement(
   epicName: string,
   sequenceNumber: number
 ): string {
-  const projCode = projectCode || extractChars(projectName, 2);
-  const epicCode = extractChars(epicName, 2);
+  const projCode = projectCode || extractChars(projectName, 4);
+  const epicCode = extractChars(epicName, 3);
   const seqNum = sequenceNumber.toString().padStart(2, '0');
-  return `P${projCode}-E${epicCode}-${seqNum}`;
+  return `${projCode}-${epicCode}-${seqNum}`;
 }
 
 /**
  * Generate functional requirement hierarchical ID
- * Format: P{ProjectCode}-R{ReqCode}-E{EpicCode}-FR{FRCode}-{Number}
- * Example: "PTE-RAU-EAU-FRL-01"
+ * Format: {ProjectCode}-{CRCode}-{EpicCode}-{FRCode}-{Number}
+ * Example: "PTES-RAU-EAU-FRL-01"
+ *
+ * This format links FR to its parent CR and Epic for better traceability.
  */
 export function generateFRId(
   projectCode: string,
@@ -95,18 +100,18 @@ export function generateFRId(
   frName: string,
   sequenceNumber: number
 ): string {
-  const projCode = projectCode || extractChars(projectName, 2);
-  const reqCode = extractChars(requirementName, 2);
-  const epicCode = extractChars(epicName, 2);
-  const frCode = extractChars(frName, 1);
+  const projCode = projectCode || extractChars(projectName, 4);
+  const reqCode = extractChars(requirementName, 3);
+  const epicCode = extractChars(epicName, 3);
+  const frCode = extractChars(frName, 3);
   const seqNum = sequenceNumber.toString().padStart(2, '0');
-  return `P${projCode}-R${reqCode}-E${epicCode}-FR${frCode}-${seqNum}`;
+  return `${projCode}-${reqCode}-${epicCode}-${frCode}-${seqNum}`;
 }
 
 /**
  * Generate FR ID when only epic exists (no requirement)
- * Format: P{ProjectCode}-E{EpicCode}-FR{FRCode}-{Number}
- * Example: "PTE-EAU-FRL-01"
+ * Format: {ProjectCode}-{EpicCode}-{FRCode}-{Number}
+ * Example: "PTES-EAU-FRL-01"
  */
 export function generateFRIdWithEpicOnly(
   projectCode: string,
@@ -115,17 +120,17 @@ export function generateFRIdWithEpicOnly(
   frName: string,
   sequenceNumber: number
 ): string {
-  const projCode = projectCode || extractChars(projectName, 2);
-  const epicCode = extractChars(epicName, 2);
-  const frCode = extractChars(frName, 1);
+  const projCode = projectCode || extractChars(projectName, 4);
+  const epicCode = extractChars(epicName, 3);
+  const frCode = extractChars(frName, 3);
   const seqNum = sequenceNumber.toString().padStart(2, '0');
-  return `P${projCode}-E${epicCode}-FR${frCode}-${seqNum}`;
+  return `${projCode}-${epicCode}-${frCode}-${seqNum}`;
 }
 
 /**
  * Generate FR ID when no epic or requirement
- * Format: P{ProjectCode}-FR{FRCode}-{Number}
- * Example: "PTE-FRL-01"
+ * Format: {ProjectCode}-{FRCode}-{Number}
+ * Example: "PTES-FRL-01"
  */
 export function generateFRIdStandalone(
   projectCode: string,
@@ -133,16 +138,18 @@ export function generateFRIdStandalone(
   frName: string,
   sequenceNumber: number
 ): string {
-  const projCode = projectCode || extractChars(projectName, 2);
-  const frCode = extractChars(frName, 1);
+  const projCode = projectCode || extractChars(projectName, 4);
+  const frCode = extractChars(frName, 3);
   const seqNum = sequenceNumber.toString().padStart(2, '0');
-  return `P${projCode}-FR${frCode}-${seqNum}`;
+  return `${projCode}-${frCode}-${seqNum}`;
 }
 
 /**
  * Generate task hierarchical ID
- * Format: {FRId}-S{SprintCode}-T{TaskCode}-{Number}
- * Example: "PTE-RAU-EAU-FRL-01-SS1-TT1"
+ * Format: {FRId}-{TaskCode}-{Number}
+ * Example: "PTES-RAU-EAU-FRL-01-LOG-01" (Task "Login" under FR)
+ *
+ * This format links task to its parent FR for better traceability.
  */
 export function generateTaskId(
   frHierarchyId: string,
@@ -150,15 +157,15 @@ export function generateTaskId(
   taskName: string,
   sequenceNumber: number
 ): string {
-  const sprintCode = extractChars(sprintName, 2) || sprintName.replace(/[^a-zA-Z0-9]/g, '').slice(0, 2).toUpperCase();
-  const taskCode = extractChars(taskName, 2) || sequenceNumber.toString();
-  return `${frHierarchyId}-S${sprintCode}-T${taskCode}`;
+  const taskCode = extractChars(taskName, 3) || sequenceNumber.toString().padStart(2, '0');
+  const seqNum = sequenceNumber.toString().padStart(2, '0');
+  return `${frHierarchyId}-${taskCode}-${seqNum}`;
 }
 
 /**
  * Generate task ID when no FR
- * Format: P{ProjectCode}-S{SprintCode}-T{TaskCode}-{Number}
- * Example: "PTE-SS1-TT1"
+ * Format: {ProjectCode}-{TaskCode}-{Number}
+ * Example: "PTES-LOG-01"
  */
 export function generateTaskIdWithoutFR(
   projectCode: string,
@@ -167,23 +174,23 @@ export function generateTaskIdWithoutFR(
   taskName: string,
   sequenceNumber: number
 ): string {
-  const projCode = projectCode || extractChars(projectName, 2);
-  const sprintCode = extractChars(sprintName, 2) || sprintName.replace(/[^a-zA-Z0-9]/g, '').slice(0, 2).toUpperCase();
-  const taskCode = extractChars(taskName, 2) || sequenceNumber.toString();
-  return `P${projCode}-S${sprintCode}-T${taskCode}`;
+  const projCode = projectCode || extractChars(projectName, 4);
+  const taskCode = extractChars(taskName, 3) || sequenceNumber.toString().padStart(2, '0');
+  const seqNum = sequenceNumber.toString().padStart(2, '0');
+  return `${projCode}-${taskCode}-${seqNum}`;
 }
 
 /**
  * Generate sprint hierarchical ID
- * Format: P{ProjectCode}-S{SprintName}
- * Example: "PTE-S1" or "PTE-SSPRINT1"
+ * Format: {ProjectCode}-S{SprintNumber}
+ * Example: "PTES-S1" or "PTES-S01"
  */
 export function generateSprintId(
   projectCode: string,
   projectName: string,
   sprintName: string
 ): string {
-  const projCode = projectCode || extractChars(projectName, 2);
+  const projCode = projectCode || extractChars(projectName, 4);
   const sprintCode = sprintName.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-  return `P${projCode}-S${sprintCode}`;
+  return `${projCode}-S${sprintCode}`;
 }

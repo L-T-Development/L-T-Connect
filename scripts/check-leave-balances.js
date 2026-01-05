@@ -1,4 +1,4 @@
-const { Client, Databases, Query, ID } = require('node-appwrite');
+const { Client, Databases } = require('node-appwrite');
 require('dotenv').config({ path: '.env.local' });
 
 const client = new Client()
@@ -8,17 +8,6 @@ const client = new Client()
 
 const databases = new Databases(client);
 const DATABASE_ID = process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID;
-
-const DEFAULT_LEAVE_ALLOCATIONS = {
-  CASUAL: 12,
-  SICK: 12,
-  ANNUAL: 21,
-  MATERNITY: 180,
-  PATERNITY: 15,
-  UNPAID: 0,
-  COMPENSATORY: 0,
-  BEREAVEMENT: 7,
-};
 
 async function checkLeaveBalances() {
   console.log('🔍 Checking leave balances...\n');
