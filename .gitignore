@@ -47,8 +47,6 @@ next-env.d.ts
 # OS
 Thumbs.db
 
-*.md
-
 .env.local
 
 chat.json
