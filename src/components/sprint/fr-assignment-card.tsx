@@ -15,6 +15,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { X, UserPlus, FileText } from 'lucide-react';
 import type { FunctionalRequirement, User } from '@/types';
 import { useUpdateFunctionalRequirement } from '@/hooks/use-functional-requirement';
+import { useTasksByFunctionalRequirement, useUpdateTask } from '@/hooks/use-task';
 import { toast } from '@/hooks/use-toast';
 
 const statusConfig: Record<FunctionalRequirement['status'], { label: string; color: string }> = {
@@ -26,7 +27,10 @@ const statusConfig: Record<FunctionalRequirement['status'], { label: string; col
   DEPLOYED: { label: 'Deployed', color: 'bg-green-500' },
 };
 
-const complexityConfig: Record<FunctionalRequirement['complexity'], { label: string; color: string }> = {
+const complexityConfig: Record<
+  FunctionalRequirement['complexity'],
+  { label: string; color: string }
+> = {
   LOW: { label: 'Low', color: 'green' },
   MEDIUM: { label: 'Medium', color: 'yellow' },
   HIGH: { label: 'High', color: 'orange' },
@@ -41,6 +45,8 @@ interface FRAssignmentCardProps {
 
 export function FRAssignmentCard({ fr, teamMembers, projectId }: FRAssignmentCardProps) {
   const updateFR = useUpdateFunctionalRequirement();
+  const updateTask = useUpdateTask();
+  const { data: linkedTasks = [] } = useTasksByFunctionalRequirement(fr.$id);
   const [isAssigning, setIsAssigning] = React.useState(false);
 
   const assignedMembers = React.useMemo(() => {
@@ -59,21 +65,54 @@ export function FRAssignmentCard({ fr, teamMembers, projectId }: FRAssignmentCar
 
     const currentAssignedTo = fr.assignedTo || [];
     const currentAssignedToNames = fr.assignedToNames || [];
+    const newAssignedTo = [...currentAssignedTo, userId];
+    const newAssignedToNames = [...currentAssignedToNames, member.name];
 
     await updateFR.mutateAsync({
       requirementId: fr.$id,
       projectId,
       updates: {
-        assignedTo: [...currentAssignedTo, userId],
-        assignedToNames: [...currentAssignedToNames, member.name],
+        assignedTo: newAssignedTo,
+        assignedToNames: newAssignedToNames,
       },
     });
 
+    // ✅ AUTO-ASSIGN: Update linked tasks with the same assignees
+    if (linkedTasks.length > 0) {
+      try {
+        await Promise.all(
+          linkedTasks.map((task) =>
+            updateTask.mutateAsync({
+              taskId: task.$id,
+              projectId,
+              updates: {
+                assignedTo: newAssignedTo,
+                assignedToNames: newAssignedToNames,
+                assigneeIds: newAssignedTo, // Also update assigneeIds for backward compatibility
+              },
+            })
+          )
+        );
+        toast({
+          title: 'Success',
+          description: `Assigned ${member.name} to ${fr.hierarchyId} and ${linkedTasks.length} linked task(s)`,
+        });
+      } catch (error) {
+        console.error('Failed to update linked tasks:', error);
+        toast({
+          title: 'Partial Success',
+          description: `Assigned ${member.name} to FR but failed to update some linked tasks.`,
+          variant: 'destructive',
+        });
+      }
+    } else {
+      toast({
+        title: 'Success',
+        description: `Assigned ${member.name} to ${fr.hierarchyId}`,
+      });
+    }
+
     setIsAssigning(false);
-    toast({
-      title: 'Success',
-      description: `Assigned ${member.name} to ${fr.hierarchyId}`,
-    });
   };
 
   const handleUnassignMember = async (userId: string) => {
@@ -95,10 +134,40 @@ export function FRAssignmentCard({ fr, teamMembers, projectId }: FRAssignmentCar
       },
     });
 
-    toast({
-      title: 'Success',
-      description: `Removed team member from ${fr.hierarchyId}`,
-    });
+    // ✅ AUTO-UNASSIGN: Update linked tasks with the same assignees
+    if (linkedTasks.length > 0) {
+      try {
+        await Promise.all(
+          linkedTasks.map((task) =>
+            updateTask.mutateAsync({
+              taskId: task.$id,
+              projectId,
+              updates: {
+                assignedTo: newAssignedTo,
+                assignedToNames: newAssignedToNames,
+                assigneeIds: newAssignedTo, // Also update assigneeIds for backward compatibility
+              },
+            })
+          )
+        );
+        toast({
+          title: 'Success',
+          description: `Removed team member from ${fr.hierarchyId} and ${linkedTasks.length} linked task(s)`,
+        });
+      } catch (error) {
+        console.error('Failed to update linked tasks:', error);
+        toast({
+          title: 'Partial Success',
+          description: `Removed from FR but failed to update some linked tasks.`,
+          variant: 'destructive',
+        });
+      }
+    } else {
+      toast({
+        title: 'Success',
+        description: `Removed team member from ${fr.hierarchyId}`,
+      });
+    }
   };
 
   const getInitials = (name: string) => {
@@ -138,19 +207,15 @@ export function FRAssignmentCard({ fr, teamMembers, projectId }: FRAssignmentCar
           </div>
         </div>
         {fr.description && (
-          <CardDescription className="line-clamp-2 mt-2">
-            {fr.description}
-          </CardDescription>
+          <CardDescription className="line-clamp-2 mt-2">{fr.description}</CardDescription>
         )}
       </CardHeader>
 
       <CardContent className="space-y-3">
         {/* Assigned Team Members */}
         <div className="space-y-2">
-          <div className="text-sm font-medium text-muted-foreground">
-            Assigned Team Members
-          </div>
-          
+          <div className="text-sm font-medium text-muted-foreground">Assigned Team Members</div>
+
           {assignedMembers.length > 0 ? (
             <div className="flex flex-wrap gap-2">
               {assignedMembers.map((member) => (
@@ -159,9 +224,7 @@ export function FRAssignmentCard({ fr, teamMembers, projectId }: FRAssignmentCar
                   className="flex items-center gap-2 bg-secondary/50 rounded-full pl-1 pr-3 py-1"
                 >
                   <Avatar className="h-6 w-6">
-                    <AvatarFallback className="text-xs">
-                      {getInitials(member.name)}
-                    </AvatarFallback>
+                    <AvatarFallback className="text-xs">{getInitials(member.name)}</AvatarFallback>
                   </Avatar>
                   <span className="text-sm">{member.name}</span>
                   <Button
@@ -204,11 +267,7 @@ export function FRAssignmentCard({ fr, teamMembers, projectId }: FRAssignmentCar
                     ))}
                   </SelectContent>
                 </Select>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setIsAssigning(false)}
-                >
+                <Button variant="outline" size="sm" onClick={() => setIsAssigning(false)}>
                   Cancel
                 </Button>
               </div>

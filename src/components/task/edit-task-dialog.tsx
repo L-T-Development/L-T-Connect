@@ -34,6 +34,7 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import type { Task, TaskStatus } from '@/types';
+import { TeamMemberSelector } from '../tasks/team-member-selector';
 
 const LABEL_COLORS = [
   { name: 'Red', value: 'red', class: 'bg-red-500' },
@@ -53,6 +54,7 @@ const taskSchema = z.object({
   priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']),
   dueDate: z.date().optional(),
   epicId: z.string().optional(),
+  assigneeIds: z.array(z.string()).optional(),
   labels: z.array(z.string()).optional(),
 });
 
@@ -65,6 +67,7 @@ interface EditTaskDialogProps {
   onSubmit: (values: TaskFormValues) => Promise<void>;
   isLoading?: boolean;
   existingLabels?: string[]; // Labels from other tasks in the project
+  workspaceId?: string;
   epics?: Array<{ $id: string; hierarchyId: string; name: string }>; // Available epics
 }
 
@@ -76,6 +79,7 @@ export function EditTaskDialog({
   isLoading = false,
   existingLabels = [],
   epics = [],
+  workspaceId,
 }: EditTaskDialogProps) {
   const [newLabel, setNewLabel] = React.useState('');
   const [selectedColor, setSelectedColor] = React.useState('blue');
@@ -89,28 +93,53 @@ export function EditTaskDialog({
       status: 'TODO' as TaskStatus,
       priority: 'MEDIUM',
       labels: [],
+      assigneeIds: [],
     },
   });
 
   const labels = form.watch('labels') || [];
 
-  const handleAddLabel = () => {
+  const handleAddLabel = (labelToAdd: string) => {
+    const currentLabels = form.getValues('labels') || [];
+    if (!currentLabels.includes(labelToAdd)) {
+      form.setValue('labels', [...currentLabels, labelToAdd], { shouldDirty: true });
+    }
+  };
+
+  const handleCreateLabel = () => {
     if (newLabel.trim()) {
       const labelWithColor = `${selectedColor}:${newLabel.trim()}`;
-      form.setValue('labels', [...labels, labelWithColor]);
+      handleAddLabel(labelWithColor);
       setNewLabel('');
     }
   };
 
   const handleRemoveLabel = (index: number) => {
-    const updated = labels.filter((_, i) => i !== index);
-    form.setValue('labels', updated);
+    const currentLabels = form.getValues('labels') || [];
+    const updated = currentLabels.filter((_, i) => i !== index);
+    form.setValue('labels', updated, { shouldDirty: true });
+  };
+
+  // Parse labels - handle both array and JSON string
+  const parseLabels = (labelsData: unknown): string[] => {
+    if (!labelsData) return [];
+    if (Array.isArray(labelsData)) return labelsData;
+    if (typeof labelsData === 'string') {
+      try {
+        const parsed = JSON.parse(labelsData);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
   };
 
   // Update form when task changes
   React.useEffect(() => {
     if (task) {
-      const taskLabels = task.labels && Array.isArray(task.labels) ? task.labels : [];
+      const taskLabels = parseLabels(task.labels);
+      const assigneeIds = parseLabels(task.assigneeIds);
       form.reset({
         title: task.title,
         description: task.description || '',
@@ -119,6 +148,7 @@ export function EditTaskDialog({
         dueDate: task.dueDate ? new Date(task.dueDate) : undefined,
         epicId: task.epicId,
         labels: taskLabels,
+        assigneeIds: assigneeIds,
       });
     }
   }, [task, form]);
@@ -135,9 +165,7 @@ export function EditTaskDialog({
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit Task</DialogTitle>
-          <DialogDescription>
-            Update task details. Task ID: {task.hierarchyId}
-          </DialogDescription>
+          <DialogDescription>Update task details. Task ID: {task.hierarchyId}</DialogDescription>
         </DialogHeader>
 
         <Form {...form}>
@@ -256,9 +284,7 @@ export function EditTaskDialog({
                     date={field.value}
                     onSelect={field.onChange}
                     placeholder="Pick a date"
-                    disabled={(date) =>
-                      date < new Date(new Date().setHours(0, 0, 0, 0))
-                    }
+                    disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
                     buttonClassName="w-full"
                   />
                   <FormMessage />
@@ -274,10 +300,7 @@ export function EditTaskDialog({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Epic (Optional)</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      value={field.value || 'none'}
-                    >
+                    <Select onValueChange={field.onChange} value={field.value || 'none'}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Select epic" />
@@ -292,6 +315,28 @@ export function EditTaskDialog({
                         ))}
                       </SelectContent>
                     </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+
+            {workspaceId && (
+              <FormField
+                control={form.control}
+                name="assigneeIds"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Assign To</FormLabel>
+                    <FormControl>
+                      <TeamMemberSelector
+                        workspaceId={workspaceId}
+                        value={field.value || []}
+                        onChange={field.onChange}
+                        placeholder="Select team members to assign..."
+                        multiSelect={true}
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -314,21 +359,25 @@ export function EditTaskDialog({
 
               {!showLabelInput && existingLabels.length > 0 && (
                 <div className="flex flex-wrap gap-2">
-                  {existingLabels.filter(label => !labels.includes(label)).map((label, index) => {
-                    const [color, text] = label.split(':');
-                    const colorConfig = LABEL_COLORS.find(c => c.value === color);
-                    return (
-                      <Badge
-                        key={index}
-                        variant="outline"
-                        className="cursor-pointer hover:bg-accent"
-                        onClick={() => form.setValue('labels', [...labels, label])}
-                      >
-                        <div className={`w-2 h-2 rounded-full mr-1 ${colorConfig?.class || 'bg-gray-500'}`} />
-                        {text}
-                      </Badge>
-                    );
-                  })}
+                  {existingLabels
+                    .filter((label) => !labels.includes(label))
+                    .map((label, index) => {
+                      const [color, text] = label.split(':');
+                      const colorConfig = LABEL_COLORS.find((c) => c.value === color);
+                      return (
+                        <Badge
+                          key={index}
+                          variant="outline"
+                          className="cursor-pointer hover:bg-accent"
+                          onClick={() => handleAddLabel(label)}
+                        >
+                          <div
+                            className={`w-2 h-2 rounded-full mr-1 ${colorConfig?.class || 'bg-gray-500'}`}
+                          />
+                          {text || label}
+                        </Badge>
+                      );
+                    })}
                 </div>
               )}
 
@@ -356,12 +405,12 @@ export function EditTaskDialog({
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         e.preventDefault();
-                        handleAddLabel();
+                        handleCreateLabel();
                       }
                     }}
                     className="flex-1"
                   />
-                  <Button type="button" onClick={handleAddLabel} variant="outline">
+                  <Button type="button" onClick={handleCreateLabel} variant="outline">
                     Add
                   </Button>
                 </div>
@@ -372,15 +421,17 @@ export function EditTaskDialog({
                   <p className="text-xs text-muted-foreground w-full">Selected labels:</p>
                   {labels.map((label, index) => {
                     const [color, text] = label.split(':');
-                    const colorConfig = LABEL_COLORS.find(c => c.value === color);
+                    const colorConfig = LABEL_COLORS.find((c) => c.value === color);
                     return (
                       <Badge
-                        key={index}
+                        key={`${label}-${index}`}
                         variant="secondary"
                         className="flex items-center gap-1 pr-1"
                       >
-                        <div className={`w-2 h-2 rounded-full ${colorConfig?.class || 'bg-gray-500'}`} />
-                        {text}
+                        <div
+                          className={`w-2 h-2 rounded-full ${colorConfig?.class || 'bg-gray-500'}`}
+                        />
+                        {text || label}
                         <button
                           type="button"
                           onClick={() => handleRemoveLabel(index)}
@@ -395,7 +446,7 @@ export function EditTaskDialog({
               )}
             </div>
 
-            <DialogFooter>
+            <DialogFooter className="justify-end">
               <Button
                 type="button"
                 variant="outline"

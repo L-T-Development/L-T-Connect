@@ -2,16 +2,23 @@
 
 import { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Button } from '@/components/ui/button';
 import { AttendanceWidget } from '@/components/attendance/attendance-widget';
 import { AttendanceCalendar } from '@/components/attendance/attendance-calendar';
 import { AttendanceStats } from '@/components/attendance/attendance-stats';
 import { TeamAttendanceTab } from '@/components/attendance/team-attendance-tab';
+import { LeaveRequestForm } from '@/components/leave/leave-request-form';
+import { useAuth } from '@/components/providers/auth-provider';
+import { useCurrentWorkspace } from '@/hooks/use-current-workspace';
 import { useIsManager } from '@/hooks/use-permissions';
-import { Clock, Calendar, BarChart3, Users } from 'lucide-react';
+import { Clock, Calendar, BarChart3, Users, FileText } from 'lucide-react';
 
 export default function AttendancePage() {
+  const { user } = useAuth();
+  const { currentWorkspaceId } = useCurrentWorkspace();
   const [currentMonth] = useState(new Date().getMonth());
   const [currentYear] = useState(new Date().getFullYear());
+  const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
   const isManager = useIsManager();
 
   return (
@@ -23,6 +30,10 @@ export default function AttendancePage() {
             Track your daily attendance, view calendar, and analyze your work patterns
           </p>
         </div>
+        <Button onClick={() => setIsLeaveModalOpen(true)} className="gap-2">
+          <FileText className="h-4 w-4" />
+          Apply for Leave
+        </Button>
       </div>
 
       <Tabs defaultValue="today" className="space-y-4">
@@ -70,6 +81,16 @@ export default function AttendancePage() {
           </TabsContent>
         )}
       </Tabs>
+
+      {/* Leave Application Modal */}
+      {user && currentWorkspaceId && (
+        <LeaveRequestForm 
+          open={isLeaveModalOpen} 
+          onOpenChange={setIsLeaveModalOpen}
+          userId={user.$id}
+          workspaceId={currentWorkspaceId}
+        />
+      )}
     </div>
   );
 }

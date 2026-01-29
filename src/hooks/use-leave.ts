@@ -6,11 +6,11 @@ import { createNotificationFromTemplate } from '@/hooks/use-notification';
 import {
   calculateLeaveDays,
   hasEnoughBalance,
-  calculateRemainingBalance,
   initializeLeaveBalance,
   type LeaveType,
   type LeaveStatus,
 } from '@/lib/leave-utils';
+import { getBalanceFieldForLeaveType } from '@/lib/leave-balance-mapper';
 
 const DATABASE_ID = process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!;
 const LEAVE_REQUESTS_COLLECTION_ID =
@@ -23,10 +23,24 @@ const USERS_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_USERS_COLLECTION_ID
 // Types
 // ============================================================================
 
+/**
+ * Helper: Map Appwrite document to LeaveRequest
+ * Appwrite DB uses "type" but our TypeScript interface uses "leaveType"
+ * Appwrite DB uses "daysCount" but our TypeScript interface uses "days"
+ */
+function mapToLeaveRequest(doc: any): LeaveRequest {
+  return {
+    ...doc,
+    leaveType: doc.type,
+    days: doc.daysCount,
+  };
+}
+
 export interface LeaveRequest {
   $id: string;
   $createdAt: string;
   $updatedAt: string;
+  workspaceId?: string; // Workspace ID for multi-tenant support
   userId: string;
   userName?: string;
   userEmail?: string;
@@ -49,9 +63,13 @@ export interface LeaveBalance {
   $id: string;
   $createdAt: string;
   $updatedAt: string;
+  workspaceId: string;
   userId: string;
-  leaveBalances: Record<LeaveType, number>;
-  lastResetDate?: string;
+  year: number;
+  paidLeave: number;
+  unpaidLeave: number;
+  halfDay: number;
+  compOff: number;
 }
 
 // ============================================================================
@@ -79,7 +97,7 @@ export function useLeaveRequests(userId?: string, status?: LeaveStatus) {
         queries
       );
 
-      return response.documents as unknown as LeaveRequest[];
+      return response.documents.map(mapToLeaveRequest);
     },
     enabled: !!userId,
   });
@@ -126,7 +144,7 @@ export function useTeamLeaveRequests(workspaceId?: string, status?: LeaveStatus)
         })
       );
 
-      return requestsWithUserDetails as unknown as LeaveRequest[];
+      return requestsWithUserDetails.map(mapToLeaveRequest);
     },
     enabled: !!workspaceId,
   });
@@ -152,42 +170,56 @@ export function useCreateLeaveRequest() {
       createdBy?: string;
       createdByName?: string;
     }) => {
-      // Calculate leave days
-      const days = calculateLeaveDays(data.startDate, data.endDate, data.halfDay);
+      // Calculate leave days - enforce full-day for non-HALF_DAY types
+      const days = calculateLeaveDays(data.startDate, data.endDate, data.halfDay, data.leaveType);
 
-      // Check leave balance
+      // Check leave balance (retrieve from DB in correct format)
+      const currentYear = new Date().getFullYear();
       const balanceQuery = await databases.listDocuments(
         DATABASE_ID,
         LEAVE_BALANCES_COLLECTION_ID,
-        [Query.equal('userId', data.userId)]
+        [
+          Query.equal('userId', data.userId),
+          Query.equal('workspaceId', data.workspaceId || ''),
+          Query.equal('year', currentYear)
+        ]
       );
 
+      let balanceDoc: any;
+      
       if (balanceQuery.documents.length === 0) {
         // Initialize leave balance if it doesn't exist
         const initialBalance = initializeLeaveBalance();
-        await databases.createDocument(
+        balanceDoc = await databases.createDocument(
           DATABASE_ID,
           LEAVE_BALANCES_COLLECTION_ID,
           ID.unique(),
           {
+            workspaceId: data.workspaceId || '',
             userId: data.userId,
-            leaveBalances: JSON.stringify(initialBalance),
-            lastResetDate: new Date().toISOString(),
+            year: currentYear,
+            ...initialBalance, // paidLeave, unpaidLeave, halfDay, compOff
           }
         );
+      } else {
+        balanceDoc = balanceQuery.documents[0];
       }
 
-      // Get current balance
-      const balanceDoc = balanceQuery.documents[0] as any;
-      const currentBalance =
-        typeof balanceDoc?.leaveBalances === 'string'
-          ? JSON.parse(balanceDoc.leaveBalances)
-          : balanceDoc?.leaveBalances || initializeLeaveBalance();
+      // Get current balance (DB schema: paidLeave, unpaidLeave, halfDay, compOff)
+      const currentBalance = {
+        paidLeave: balanceDoc.paidLeave || 0,
+        unpaidLeave: balanceDoc.unpaidLeave || 0,
+        halfDay: balanceDoc.halfDay || 0,
+        compOff: balanceDoc.compOff || 0,
+      };
 
-      // Check if enough balance
+      // Check if enough balance using the mapper
+      const balanceField = getBalanceFieldForLeaveType(data.leaveType);
+      const availableBalance = currentBalance[balanceField];
+      
       if (!hasEnoughBalance(data.leaveType, days, currentBalance)) {
         throw new Error(
-          `Insufficient leave balance. You need ${days} days but have ${currentBalance[data.leaveType]} days remaining.`
+          `Insufficient leave balance. You need ${days} days but have ${availableBalance} days remaining.`
         );
       }
 
@@ -199,21 +231,18 @@ export function useCreateLeaveRequest() {
         {
           workspaceId: data.workspaceId || '',
           userId: data.userId,
-          leaveType: data.leaveType,
+          type: data.leaveType,
           startDate: data.startDate,
           endDate: data.endDate,
-          days,
-          halfDay: data.halfDay || false,
+          daysCount: days,
           reason: data.reason,
           status: 'PENDING',
-          emergencyContact: data.emergencyContact || '',
-          document: data.document || '',
           createdBy: data.createdBy || data.userId,
           createdByName: data.createdByName || '',
         }
       );
 
-      return leaveRequest as unknown as LeaveRequest;
+      return mapToLeaveRequest(leaveRequest);
     },
     onSuccess: async (leaveRequest, variables) => {
       queryClient.invalidateQueries({ queryKey: ['leaveRequests', variables.userId] });
@@ -250,7 +279,7 @@ export function useCreateLeaveRequest() {
                 leaveId: leaveRequest.$id,
                 employeeName: variables.createdByName || 'Employee',
                 leaveType: variables.leaveType,
-                days: calculateLeaveDays(variables.startDate, variables.endDate, variables.halfDay),
+                days: calculateLeaveDays(variables.startDate, variables.endDate, variables.halfDay, variables.leaveType),
                 startDate: variables.startDate,
                 endDate: variables.endDate,
                 entityType: 'LEAVE',
@@ -292,11 +321,12 @@ export function useApproveLeave() {
       approverComments?: string;
     }) => {
       // Get leave request details
-      const leaveRequest = (await databases.getDocument(
+      const leaveRequestDoc = await databases.getDocument(
         DATABASE_ID,
         LEAVE_REQUESTS_COLLECTION_ID,
         data.leaveRequestId
-      )) as any;
+      );
+      const leaveRequest = mapToLeaveRequest(leaveRequestDoc);
 
       // Update leave request status
       const updatedRequest = await databases.updateDocument(
@@ -312,38 +342,45 @@ export function useApproveLeave() {
         }
       );
 
-      // Update leave balance
+      // Update leave balance using the mapping layer
+      // THIS IS WHERE THE MAGIC HAPPENS - we use the mapper to know which field to update
+      const currentYear = new Date().getFullYear();
       const balanceQuery = await databases.listDocuments(
         DATABASE_ID,
         LEAVE_BALANCES_COLLECTION_ID,
-        [Query.equal('userId', leaveRequest.userId)]
+        [
+          Query.equal('userId', leaveRequest.userId),
+          Query.equal('workspaceId', leaveRequest.workspaceId || ''),
+          Query.equal('year', currentYear)
+        ]
       );
 
       if (balanceQuery.documents.length > 0) {
         const balanceDoc = balanceQuery.documents[0] as any;
-        const currentBalance =
-          typeof balanceDoc.leaveBalances === 'string'
-            ? JSON.parse(balanceDoc.leaveBalances)
-            : balanceDoc.leaveBalances;
+        
+        // Get which DB field to update based on leave type
+        const balanceField = getBalanceFieldForLeaveType(leaveRequest.leaveType);
+        
+        // Calculate deduction amount (ALL FIELDS ARE INTEGER)
+        // HALF_DAY leave type: always deduct 1 unit (one half-day session)
+        // Other types: deduct full days (ceiling to handle any edge cases)
+        const deductionAmount = leaveRequest.leaveType === 'HALF_DAY' 
+          ? 1 
+          : Math.ceil(leaveRequest.days);
+        
+        // Calculate new balance
+        const currentFieldValue = balanceDoc[balanceField] || 0;
+        const newFieldValue = Math.max(0, currentFieldValue - deductionAmount);
 
-        const newBalance = calculateRemainingBalance(
-          leaveRequest.leaveType,
-          leaveRequest.days,
-          currentBalance
-        );
-
-        const updatedBalances = {
-          ...currentBalance,
-          [leaveRequest.leaveType]: newBalance,
-        };
+        // Update ONLY the relevant balance field
+        const updateData: any = {};
+        updateData[balanceField] = newFieldValue;
 
         await databases.updateDocument(
           DATABASE_ID,
           LEAVE_BALANCES_COLLECTION_ID,
           balanceDoc.$id,
-          {
-            leaveBalances: JSON.stringify(updatedBalances),
-          }
+          updateData
         );
       }
 
@@ -384,7 +421,7 @@ export function useApproveLeave() {
         console.error('Failed to send approval email:', await emailResponse.text());
       }
 
-      return updatedRequest as unknown as LeaveRequest;
+      return mapToLeaveRequest(updatedRequest);
     },
     onSuccess: async (_leaveRequest, variables) => {
       queryClient.invalidateQueries({ queryKey: ['leaveRequests'] });
@@ -405,8 +442,8 @@ export function useApproveLeave() {
         type: 'LEAVE_APPROVED',
         data: {
           leaveId: leaveDoc.$id,
-          leaveType: leaveDoc.leaveType,
-          days: leaveDoc.days,
+          leaveType: leaveDoc.type,
+          days: leaveDoc.daysCount,
           approverName: variables.approverName,
           entityType: 'LEAVE',
         },
@@ -441,11 +478,12 @@ export function useRejectLeave() {
       rejectionReason: string;
     }) => {
       // Get leave request details
-      const leaveRequest = (await databases.getDocument(
+      const leaveRequestDoc = await databases.getDocument(
         DATABASE_ID,
         LEAVE_REQUESTS_COLLECTION_ID,
         data.leaveRequestId
-      )) as any;
+      );
+      const leaveRequest = mapToLeaveRequest(leaveRequestDoc);
 
       // Update leave request status
       const updatedRequest = await databases.updateDocument(
@@ -499,7 +537,7 @@ export function useRejectLeave() {
         console.error('Failed to send rejection email:', await emailResponse.text());
       }
 
-      return updatedRequest as unknown as LeaveRequest;
+      return mapToLeaveRequest(updatedRequest);
     },
     onSuccess: async (_leaveRequest, variables) => {
       queryClient.invalidateQueries({ queryKey: ['leaveRequests'] });
@@ -519,8 +557,8 @@ export function useRejectLeave() {
         type: 'LEAVE_REJECTED',
         data: {
           leaveId: leaveDoc.$id,
-          leaveType: leaveDoc.leaveType,
-          days: leaveDoc.days,
+          leaveType: leaveDoc.type,
+          days: leaveDoc.daysCount,
           reason: variables.rejectionReason,
           entityType: 'LEAVE',
         },
@@ -550,11 +588,12 @@ export function useCancelLeaveRequest() {
   return useMutation({
     mutationFn: async (leaveRequestId: string) => {
       // Get leave request to restore balance if approved
-      const leaveRequest = (await databases.getDocument(
+      const leaveRequestDoc = await databases.getDocument(
         DATABASE_ID,
         LEAVE_REQUESTS_COLLECTION_ID,
         leaveRequestId
-      )) as any;
+      );
+      const leaveRequest = mapToLeaveRequest(leaveRequestDoc);
 
       // Validate: Prevent cancellation of past or ongoing leaves
       const today = new Date();
@@ -579,34 +618,45 @@ export function useCancelLeaveRequest() {
         }
       );
 
-      // If leave was approved, restore the balance
+      // If leave was approved, restore the balance using the mapper
       if (leaveRequest.status === 'APPROVED') {
+        const currentYear = new Date().getFullYear();
         const balanceQuery = await databases.listDocuments(
           DATABASE_ID,
           LEAVE_BALANCES_COLLECTION_ID,
-          [Query.equal('userId', leaveRequest.userId)]
+          [
+            Query.equal('userId', leaveRequest.userId),
+            Query.equal('workspaceId', leaveRequest.workspaceId || ''),
+            Query.equal('year', currentYear)
+          ]
         );
 
         if (balanceQuery.documents.length > 0) {
           const balanceDoc = balanceQuery.documents[0] as any;
-          const currentBalance =
-            typeof balanceDoc.leaveBalances === 'string'
-              ? JSON.parse(balanceDoc.leaveBalances)
-              : balanceDoc.leaveBalances;
+          
+          // Get which DB field to restore based on leave type
+          const balanceField = getBalanceFieldForLeaveType(leaveRequest.leaveType);
+          
+          // Calculate restoration amount (match deduction logic - INTEGER)
+          // HALF_DAY leave type: restore 1 unit
+          // Other types: restore full days
+          const restorationAmount = leaveRequest.leaveType === 'HALF_DAY' 
+            ? 1 
+            : Math.ceil(leaveRequest.days);
+          
+          // Restore balance
+          const currentFieldValue = balanceDoc[balanceField] || 0;
+          const restoredValue = currentFieldValue + restorationAmount;
 
-          const restoredBalances = {
-            ...currentBalance,
-            [leaveRequest.leaveType]:
-              (currentBalance[leaveRequest.leaveType] || 0) + leaveRequest.days,
-          };
+          // Update ONLY the relevant balance field
+          const updateData: any = {};
+          updateData[balanceField] = restoredValue;
 
           await databases.updateDocument(
             DATABASE_ID,
             LEAVE_BALANCES_COLLECTION_ID,
             balanceDoc.$id,
-            {
-              leaveBalances: JSON.stringify(restoredBalances),
-            }
+            updateData
           );
         }
       }
@@ -637,17 +687,23 @@ export function useCancelLeaveRequest() {
 
 /**
  * Get user's leave balance
+ * Returns the 4 DB fields: paidLeave, unpaidLeave, halfDay, compOff
  */
-export function useLeaveBalance(userId?: string) {
+export function useLeaveBalance(userId?: string, workspaceId?: string) {
   return useQuery({
-    queryKey: ['leaveBalance', userId],
+    queryKey: ['leaveBalance', userId, workspaceId],
     queryFn: async () => {
-      if (!userId) return null;
+      if (!userId || !workspaceId) return null;
 
+      const currentYear = new Date().getFullYear();
       const response = await databases.listDocuments(
         DATABASE_ID,
         LEAVE_BALANCES_COLLECTION_ID,
-        [Query.equal('userId', userId)]
+        [
+          Query.equal('userId', userId),
+          Query.equal('workspaceId', workspaceId),
+          Query.equal('year', currentYear)
+        ]
       );
 
       if (response.documents.length === 0) {
@@ -658,27 +714,18 @@ export function useLeaveBalance(userId?: string) {
           LEAVE_BALANCES_COLLECTION_ID,
           ID.unique(),
           {
+            workspaceId,
             userId,
-            leaveBalances: JSON.stringify(initialBalance),
-            lastResetDate: new Date().toISOString(),
+            year: currentYear,
+            ...initialBalance, // paidLeave, unpaidLeave, halfDay, compOff
           }
         );
 
-        return {
-          ...newBalance,
-          leaveBalances: initialBalance,
-        } as unknown as LeaveBalance;
+        return newBalance as unknown as LeaveBalance;
       }
 
-      const balanceDoc = response.documents[0] as any;
-      return {
-        ...balanceDoc,
-        leaveBalances:
-          typeof balanceDoc.leaveBalances === 'string'
-            ? JSON.parse(balanceDoc.leaveBalances)
-            : balanceDoc.leaveBalances,
-      } as unknown as LeaveBalance;
+      return response.documents[0] as unknown as LeaveBalance;
     },
-    enabled: !!userId,
+    enabled: !!userId && !!workspaceId,
   });
 }

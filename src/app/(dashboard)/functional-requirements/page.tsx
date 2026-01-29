@@ -6,7 +6,8 @@ import { useCurrentWorkspace } from '@/hooks/use-current-workspace';
 import { useProjects } from '@/hooks/use-project';
 import { useFunctionalRequirements } from '@/hooks/use-functional-requirement';
 import { useClientRequirements } from '@/hooks/use-client-requirement';
-import { useEpics } from '@/hooks/use-epic'; // ✅ NEW: Load epics for mapping
+import { useEpics } from '@/hooks/use-epic';
+import { useTasks } from '@/hooks/use-task';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -19,10 +20,13 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Plus, FileText, Search, Filter } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
 import { formatDate } from '@/lib/utils';
 import type { FunctionalRequirement } from '@/types';
 import { CreateFunctionalRequirementDialog } from '@/components/requirements/create-functional-requirement-dialog';
 import { FunctionalRequirementDetailDialog } from '@/components/requirements/functional-requirement-detail-dialog';
+import { useIsAdmin, useHasPermission } from '@/hooks/use-permissions';
+import { Permission } from '@/lib/permissions';
 
 const statusConfig: Record<FunctionalRequirement['status'], { label: string; color: string }> = {
   DRAFT: { label: 'Draft', color: 'bg-gray-500' },
@@ -33,15 +37,10 @@ const statusConfig: Record<FunctionalRequirement['status'], { label: string; col
   DEPLOYED: { label: 'Deployed', color: 'bg-green-500' },
 };
 
-// Note: Type field removed from FunctionalRequirement interface
-// const typeConfig: Record<FunctionalRequirement['type'], { label: string; color: string }> = {
-//   FUNCTIONAL: { label: 'Functional', color: 'blue' },
-//   NON_FUNCTIONAL: { label: 'Non-Functional', color: 'purple' },
-//   TECHNICAL: { label: 'Technical', color: 'orange' },
-//   BUSINESS: { label: 'Business', color: 'green' },
-// };
-
-const complexityConfig: Record<FunctionalRequirement['complexity'], { label: string; color: string }> = {
+const complexityConfig: Record<
+  FunctionalRequirement['complexity'],
+  { label: string; color: string }
+> = {
   LOW: { label: 'Low', color: 'green' },
   MEDIUM: { label: 'Medium', color: 'yellow' },
   HIGH: { label: 'High', color: 'orange' },
@@ -53,9 +52,16 @@ export default function FunctionalRequirementsPage() {
   const { currentWorkspace } = useCurrentWorkspace();
   const { data: projects = [] } = useProjects(currentWorkspace?.$id);
 
+  // Permission checks
+  const isAdmin = useIsAdmin();
+  const canCreateFR = useHasPermission(Permission.CREATE_EPIC);
+  const canEditFR = useHasPermission(Permission.EDIT_EPIC);
+  const canDeleteFR = useHasPermission(Permission.DELETE_EPIC);
+
   const [selectedProjectId, setSelectedProjectId] = React.useState<string>('');
   const [createDialogOpen, setCreateDialogOpen] = React.useState(false);
-  const [selectedRequirement, setSelectedRequirement] = React.useState<FunctionalRequirement | null>(null);
+  const [selectedRequirement, setSelectedRequirement] =
+    React.useState<FunctionalRequirement | null>(null);
   const [searchQuery, setSearchQuery] = React.useState('');
   const [statusFilter, setStatusFilter] = React.useState<string>('all');
 
@@ -64,7 +70,7 @@ export default function FunctionalRequirementsPage() {
     const STORAGE_KEY = 'selected-project-id';
     const savedProjectId = localStorage.getItem(STORAGE_KEY);
 
-    if (savedProjectId && projects.some(p => p.$id === savedProjectId)) {
+    if (savedProjectId && projects.some((p) => p.$id === savedProjectId)) {
       // Restore saved project if it still exists
       setSelectedProjectId(savedProjectId);
     } else if (projects.length > 0 && !selectedProjectId) {
@@ -83,12 +89,15 @@ export default function FunctionalRequirementsPage() {
 
   const { data: requirements = [], isLoading } = useFunctionalRequirements(selectedProjectId);
   const { data: clientRequirements = [] } = useClientRequirements(selectedProjectId);
-  const { data: epics = [] } = useEpics(selectedProjectId); // ✅ NEW: Load epics for mapping
+  const { data: epics = [] } = useEpics(selectedProjectId);
+  const { data: tasks = [] } = useTasks(selectedProjectId);
 
   // NOTE: The FunctionalRequirement type no longer includes a parentRequirementId field.
   // Render requirements as a flat list (ordered by hierarchyId) to avoid relying on a parent reference.
   const hierarchicalRequirements = React.useMemo(() => {
-    return [...requirements].sort((a, b) => (a.hierarchyId || '').localeCompare(b.hierarchyId || ''));
+    return [...requirements].sort((a, b) =>
+      (a.hierarchyId || '').localeCompare(b.hierarchyId || '')
+    );
   }, [requirements]);
 
   // Filter requirements
@@ -97,15 +106,16 @@ export default function FunctionalRequirementsPage() {
 
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(req =>
-        req.title.toLowerCase().includes(query) ||
-        req.hierarchyId.toLowerCase().includes(query) ||
-        req.description?.toLowerCase().includes(query)
+      filtered = filtered.filter(
+        (req) =>
+          req.title.toLowerCase().includes(query) ||
+          req.hierarchyId.toLowerCase().includes(query) ||
+          req.description?.toLowerCase().includes(query)
       );
     }
 
     if (statusFilter !== 'all') {
-      filtered = filtered.filter(req => req.status === statusFilter);
+      filtered = filtered.filter((req) => req.status === statusFilter);
     }
 
     return filtered;
@@ -115,20 +125,28 @@ export default function FunctionalRequirementsPage() {
   const stats = React.useMemo(() => {
     return {
       total: requirements.length,
-      draft: requirements.filter(r => r.status === 'DRAFT').length,
-      review: requirements.filter(r => r.status === 'REVIEW').length,
-      approved: requirements.filter(r => r.status === 'APPROVED').length,
-      implemented: requirements.filter(r => r.status === 'IMPLEMENTED').length,
-      tested: requirements.filter(r => r.status === 'TESTED').length,
-      deployed: requirements.filter(r => r.status === 'DEPLOYED').length,
+      draft: requirements.filter((r) => r.status === 'DRAFT').length,
+      review: requirements.filter((r) => r.status === 'REVIEW').length,
+      approved: requirements.filter((r) => r.status === 'APPROVED').length,
+      implemented: requirements.filter((r) => r.status === 'IMPLEMENTED').length,
+      tested: requirements.filter((r) => r.status === 'TESTED').length,
+      deployed: requirements.filter((r) => r.status === 'DEPLOYED').length,
     };
   }, [requirements]);
 
-  const selectedProject = projects.find(p => p.$id === selectedProjectId);
+  const selectedProject = projects.find((p) => p.$id === selectedProjectId);
 
   const renderRequirement = (req: FunctionalRequirement) => {
     const complexity = complexityConfig[req.complexity];
-    const clientReq = clientRequirements.find(cr => cr.$id === req.clientRequirementId);
+    const clientReq = clientRequirements.find((cr) => cr.$id === req.clientRequirementId);
+
+    // Calculate progress from linked tasks if stored progress is 0
+    const linkedTasks = tasks.filter((t) => t.functionalRequirementId === req.$id);
+    const completedTasks = linkedTasks.filter((t) => t.status === 'DONE').length;
+    let progress = req.progress ?? 0;
+    if (progress === 0 && linkedTasks.length > 0) {
+      progress = Math.round((completedTasks / linkedTasks.length) * 100);
+    }
 
     const priorityColors = {
       CRITICAL: 'bg-red-500 text-white',
@@ -159,29 +177,32 @@ export default function FunctionalRequirementsPage() {
               </div>
             )}
             {clientReq && (
-              <div className="text-xs text-muted-foreground mt-1">
-                Linked to: {clientReq.title}
-              </div>
+              <div className="text-xs text-muted-foreground mt-1">Linked to: {clientReq.title}</div>
             )}
           </div>
         </td>
         <td className="p-4">
           {req.priority ? (
-            <Badge className={priorityColors[req.priority]}>
-              {req.priority}
-            </Badge>
+            <Badge className={priorityColors[req.priority]}>{req.priority}</Badge>
           ) : (
             <span className="text-muted-foreground text-sm">-</span>
           )}
         </td>
         <td className="p-4">
-          <Badge variant="outline" className={`bg-${complexity.color}-500/10 text-${complexity.color}-700`}>
+          <Badge
+            variant="outline"
+            className={`bg-${complexity.color}-500/10 text-${complexity.color}-700`}
+          >
             {complexity.label}
           </Badge>
         </td>
-        <td className="p-4 text-sm text-muted-foreground">
-          {formatDate(req.$createdAt)}
+        <td className="p-4">
+          <div className="flex items-center gap-2">
+            <Progress value={progress} className="w-20 h-2" />
+            <span className="text-sm text-muted-foreground">{progress}%</span>
+          </div>
         </td>
+        <td className="p-4 text-sm text-muted-foreground">{formatDate(req.$createdAt)}</td>
       </tr>
     );
   };
@@ -196,10 +217,12 @@ export default function FunctionalRequirementsPage() {
             Technical specifications derived from client requirements
           </p>
         </div>
-        <Button onClick={() => setCreateDialogOpen(true)} disabled={!selectedProjectId}>
-          <Plus className="mr-2 h-4 w-4" />
-          New Requirement
-        </Button>
+        {(canCreateFR || isAdmin) && (
+          <Button onClick={() => setCreateDialogOpen(true)} disabled={!selectedProjectId}>
+            <Plus className="mr-2 h-4 w-4" />
+            New Requirement
+          </Button>
+        )}
       </div>
 
       {/* Project Selector */}
@@ -359,10 +382,12 @@ export default function FunctionalRequirementsPage() {
                       ? 'No requirements match your filters'
                       : 'No functional requirements yet'}
                   </p>
-                  <Button onClick={() => setCreateDialogOpen(true)}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Create First Requirement
-                  </Button>
+                  {(canCreateFR || isAdmin) && (
+                    <Button onClick={() => setCreateDialogOpen(true)}>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Create First Requirement
+                    </Button>
+                  )}
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -373,11 +398,12 @@ export default function FunctionalRequirementsPage() {
                         <th className="p-4 font-medium">Title</th>
                         <th className="p-4 font-medium">Priority</th>
                         <th className="p-4 font-medium">Complexity</th>
+                        <th className="p-4 font-medium">Progress</th>
                         <th className="p-4 font-medium">Created</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y">
-                      {filteredRequirements.map(req => renderRequirement(req))}
+                      {filteredRequirements.map((req) => renderRequirement(req))}
                     </tbody>
                   </table>
                 </div>
@@ -409,6 +435,8 @@ export default function FunctionalRequirementsPage() {
           projectId={selectedProjectId}
           workspaceId={currentWorkspace?.$id || ''}
           clientRequirements={clientRequirements}
+          canEdit={canEditFR || isAdmin}
+          canDelete={canDeleteFR || isAdmin}
         />
       )}
     </div>
