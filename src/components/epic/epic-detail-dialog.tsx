@@ -34,6 +34,7 @@ interface EpicDetailDialogProps {
   onOpenChange: (open: boolean) => void;
   projectId: string;
   tasks: Task[];
+  canDelete?: boolean; // Permission to delete epics (managers/assistant managers)
 }
 
 export function EpicDetailDialog({
@@ -42,6 +43,7 @@ export function EpicDetailDialog({
   onOpenChange,
   projectId,
   tasks,
+  canDelete = false,
 }: EpicDetailDialogProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
   const deleteEpic = useDeleteEpic();
@@ -53,11 +55,14 @@ export function EpicDetailDialog({
   const metrics = React.useMemo(() => {
     // If we have FRs, calculate from them
     if (linkedFRs.length > 0) {
-      const completedFRs = linkedFRs.filter(fr => fr.status === 'DEPLOYED' || fr.status === 'TESTED').length;
-      const inProgressFRs = linkedFRs.filter(fr =>
-        fr.status === 'APPROVED' || fr.status === 'IMPLEMENTED' || fr.status === 'REVIEW'
+      const completedFRs = linkedFRs.filter(
+        (fr) => fr.status === 'DEPLOYED' || fr.status === 'TESTED'
       ).length;
-      const progress = linkedFRs.length > 0 ? Math.round((completedFRs / linkedFRs.length) * 100) : 0;
+      const inProgressFRs = linkedFRs.filter(
+        (fr) => fr.status === 'APPROVED' || fr.status === 'IMPLEMENTED' || fr.status === 'REVIEW'
+      ).length;
+      const progress =
+        linkedFRs.length > 0 ? Math.round((completedFRs / linkedFRs.length) * 100) : 0;
 
       // Calculate auto status
       let autoStatus: Epic['status'] = 'TODO';
@@ -74,12 +79,12 @@ export function EpicDetailDialog({
         progress,
         autoStatus,
         totalTasks: tasks.length,
-        completedTasks: tasks.filter(t => t.status === 'DONE').length,
+        completedTasks: tasks.filter((t) => t.status === 'DONE').length,
       };
     }
 
     // Fallback to task-based calculation
-    const completedTasks = tasks.filter(t => t.status === 'DONE').length;
+    const completedTasks = tasks.filter((t) => t.status === 'DONE').length;
     const progress = tasks.length > 0 ? Math.round((completedTasks / tasks.length) * 100) : 0;
 
     let autoStatus: Epic['status'] = 'TODO';
@@ -126,26 +131,13 @@ export function EpicDetailDialog({
                   <Badge variant="outline" className="font-mono">
                     {epic.hierarchyId}
                   </Badge>
-                  <div
-                    className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: epic.color }}
-                  />
+                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: epic.color }} />
                 </div>
                 <DialogTitle className="text-2xl">{epic.name}</DialogTitle>
                 {epic.description && (
-                  <DialogDescription className="text-base">
-                    {epic.description}
-                  </DialogDescription>
+                  <DialogDescription className="text-base">{epic.description}</DialogDescription>
                 )}
               </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setDeleteDialogOpen(true)}
-                className="text-destructive hover:text-destructive"
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
             </div>
           </DialogHeader>
 
@@ -184,9 +176,7 @@ export function EpicDetailDialog({
                     <div className="flex items-center gap-2">
                       <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
                       <span className="text-muted-foreground">In Progress:</span>
-                      <span className="font-medium">
-                        {metrics.inProgressFRs}
-                      </span>
+                      <span className="font-medium">{metrics.inProgressFRs}</span>
                     </div>
                   </>
                 ) : (
@@ -240,9 +230,7 @@ export function EpicDetailDialog({
                               </p>
                             )}
                           </div>
-                          <Badge className={statusColor}>
-                            {fr.status}
-                          </Badge>
+                          <Badge className={statusColor}>{fr.status}</Badge>
                         </div>
                       );
                     })}
@@ -312,18 +300,26 @@ export function EpicDetailDialog({
             <div className="grid grid-cols-2 gap-4 text-xs text-muted-foreground">
               <div>
                 <div>Created</div>
-                <div className="font-medium text-foreground">
-                  {formatDate(epic.$createdAt)}
-                </div>
+                <div className="font-medium text-foreground">{formatDate(epic.$createdAt)}</div>
               </div>
               <div>
                 <div>Last Updated</div>
-                <div className="font-medium text-foreground">
-                  {formatDate(epic.$updatedAt)}
-                </div>
+                <div className="font-medium text-foreground">{formatDate(epic.$updatedAt)}</div>
               </div>
             </div>
           </div>
+
+          <Separator />
+          {canDelete && (
+            <Button
+              variant="destructive"
+              onClick={() => setDeleteDialogOpen(true)}
+              className="text-white"
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete
+            </Button>
+          )}
         </DialogContent>
       </Dialog>
 
@@ -333,12 +329,12 @@ export function EpicDetailDialog({
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Epic?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete "{epic.name}". Tasks linked to this epic will
+              This will permanently delete &ldquo;{epic.name}&rquo;. Tasks linked to this epic will
               not be deleted, but they will be unlinked. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogFooter className="flex-col-reverse sm:flex-row sm:justify-between sm:space-x-0">
+            <AlertDialogCancel className="mt-2 sm:mt-0">Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"

@@ -7,11 +7,15 @@ import { AttendanceWidget } from '@/components/attendance/attendance-widget';
 import { AttendanceCalendar } from '@/components/attendance/attendance-calendar';
 import { AttendanceStats } from '@/components/attendance/attendance-stats';
 import { TeamAttendanceTab } from '@/components/attendance/team-attendance-tab';
-import { LeaveApplicationForm } from '@/components/leave/LeaveApplicationForm';
+import { LeaveRequestForm } from '@/components/leave/leave-request-form';
+import { useAuth } from '@/components/providers/auth-provider';
+import { useCurrentWorkspace } from '@/hooks/use-current-workspace';
 import { useIsManager } from '@/hooks/use-permissions';
 import { Clock, Calendar, BarChart3, Users, FileText } from 'lucide-react';
 
 export default function AttendancePage() {
+  const { user } = useAuth();
+  const { currentWorkspaceId } = useCurrentWorkspace();
   const [currentMonth] = useState(new Date().getMonth());
   const [currentYear] = useState(new Date().getFullYear());
   const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
@@ -79,10 +83,14 @@ export default function AttendancePage() {
       </Tabs>
 
       {/* Leave Application Modal */}
-      <LeaveApplicationForm 
-        open={isLeaveModalOpen} 
-        onOpenChange={setIsLeaveModalOpen} 
-      />
+      {user && currentWorkspaceId && (
+        <LeaveRequestForm 
+          open={isLeaveModalOpen} 
+          onOpenChange={setIsLeaveModalOpen}
+          userId={user.$id}
+          workspaceId={currentWorkspaceId}
+        />
+      )}
     </div>
   );
 }

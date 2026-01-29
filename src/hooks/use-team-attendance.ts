@@ -96,8 +96,8 @@ export function useTeamAttendance(workspaceId?: string, date?: string) {
 
                 return {
                     userId: member.userId,
-                    userName: member.userName || member.userEmail,
-                    userEmail: member.userEmail,
+                    userName: member.userName || member.email,
+                    userEmail: member.email,
                     userAvatar: member.userAvatar,
                     role: member.role || 'MEMBER',
                     attendance: attendance ? {

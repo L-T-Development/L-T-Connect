@@ -1,18 +1,27 @@
-"use client";
+'use client';
 
-import * as React from "react";
-import { useAuth } from "@/components/providers/auth-provider";
+import * as React from 'react';
+import { useAuth } from '@/components/providers/auth-provider';
 import { useCurrentWorkspace } from '@/hooks/use-current-workspace';
-import { useWorkspaceTasks } from "@/hooks/use-task";
-import { useTeamMembers, useUpdateTeamMember, useDeleteTeamMember, ROLE_CONFIG, STATUS_CONFIG, TeamMember } from "@/hooks/use-team";
-import { useHasPermission } from "@/hooks/use-permissions";
-import { Permission } from "@/lib/permissions";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { cn } from "@/lib/utils";
+import { useWorkspaceTasks } from '@/hooks/use-task';
+import {
+  useTeamMembers,
+  useUpdateTeamMember,
+  useDeleteTeamMember,
+  useMemberTaskCounts,
+  getWorkloadLevel,
+  ROLE_CONFIG,
+  STATUS_CONFIG,
+  TeamMember,
+} from '@/hooks/use-team';
+import { useHasPermission } from '@/hooks/use-permissions';
+import { Permission } from '@/lib/permissions';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { cn } from '@/lib/utils';
 import {
   Table,
   TableBody,
@@ -20,7 +29,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from '@/components/ui/table';
 import {
   Dialog,
   DialogContent,
@@ -28,14 +37,14 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from '@/components/ui/dialog';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from '@/components/ui/select';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -43,32 +52,35 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Label } from "@/components/ui/label";
-import { Users, Search, MoreVertical, Mail, Phone, Trash2, Edit } from "lucide-react";
-import { toast } from "sonner";
-import { ResourceAllocationCard } from "@/components/team/resource-allocation-card";
-import { AddMembersSection } from "@/components/team/add-members-section";
-import { DeleteMemberDialog } from "@/components/team/delete-member-dialog";
-import { calculateTeamWorkload } from "@/lib/team-workload";
-import { addDays } from "date-fns";
+} from '@/components/ui/dropdown-menu';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Label } from '@/components/ui/label';
+import { Users, Search, MoreVertical, Mail, Phone, Trash2, Edit } from 'lucide-react';
+import { toast } from 'sonner';
+import { ResourceAllocationCard } from '@/components/team/resource-allocation-card';
+import { AddMembersSection } from '@/components/team/add-members-section';
+import { DeleteMemberDialog } from '@/components/team/delete-member-dialog';
+import { calculateTeamWorkload } from '@/lib/team-workload';
+import { addDays } from 'date-fns';
 
 export default function TeamPage() {
   const { user } = useAuth();
   const { currentWorkspace, isLoading: workspacesLoading } = useCurrentWorkspace();
 
-  const { data: teamMembers = [], isLoading: membersLoading } = useTeamMembers(currentWorkspace?.$id);
+  const { data: teamMembers = [], isLoading: membersLoading } = useTeamMembers(
+    currentWorkspace?.$id
+  );
   const { data: tasks } = useWorkspaceTasks(currentWorkspace?.$id);
+  const { data: taskCounts } = useMemberTaskCounts(currentWorkspace?.$id);
   const updateMember = useUpdateTeamMember();
   const deleteMember = useDeleteTeamMember();
 
   // Check if user has permission to invite members
   const canInviteMembers = useHasPermission(Permission.INVITE_MEMBER);
 
-  const [searchQuery, setSearchQuery] = React.useState("");
-  const [selectedRole, setSelectedRole] = React.useState<string>("ALL");
-  const [selectedStatus, setSelectedStatus] = React.useState<string>("ALL");
+  const [searchQuery, setSearchQuery] = React.useState('');
+  const [selectedRole, setSelectedRole] = React.useState<string>('ALL');
+  const [selectedStatus, setSelectedStatus] = React.useState<string>('ALL');
   const [editingMember, setEditingMember] = React.useState<TeamMember | null>(null);
   const [memberToDelete, setMemberToDelete] = React.useState<TeamMember | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
@@ -77,10 +89,11 @@ export default function TeamPage() {
   // Filter team members
   const filteredMembers = React.useMemo(() => {
     return teamMembers.filter((member) => {
-      const matchesSearch = member.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      const matchesSearch =
+        member.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         member.email.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesRole = selectedRole === "ALL" || member.role === selectedRole;
-      const matchesStatus = selectedStatus === "ALL" || member.status === selectedStatus;
+      const matchesRole = selectedRole === 'ALL' || member.role === selectedRole;
+      const matchesStatus = selectedStatus === 'ALL' || member.status === selectedStatus;
 
       return matchesSearch && matchesRole && matchesStatus;
     });
@@ -89,11 +102,14 @@ export default function TeamPage() {
   // Calculate stats
   const stats = React.useMemo(() => {
     const totalMembers = teamMembers.length;
-    const activeMembers = teamMembers.filter(m => m.status === 'ACTIVE').length;
-    const roleBreakdown = teamMembers.reduce((acc, member) => {
-      acc[member.role] = (acc[member.role] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
+    const activeMembers = teamMembers.filter((m) => m.status === 'ACTIVE').length;
+    const roleBreakdown = teamMembers.reduce(
+      (acc, member) => {
+        acc[member.role] = (acc[member.role] || 0) + 1;
+        return acc;
+      },
+      {} as Record<string, number>
+    );
 
     return { totalMembers, activeMembers, roleBreakdown };
   }, [teamMembers]);
@@ -121,7 +137,7 @@ export default function TeamPage() {
     const updates = {
       name: formData.get('name') as string,
       email: formData.get('email') as string,
-      phone: formData.get('phone') as string || undefined,
+      phone: (formData.get('phone') as string) || undefined,
       role: formData.get('role') as TeamMember['role'],
       status: formData.get('status') as TeamMember['status'],
     };
@@ -204,11 +220,11 @@ export default function TeamPage() {
 
       {/* Team Management Tabs */}
       <Tabs defaultValue="members" className="space-y-6">
-        <TabsList className={canInviteMembers ? "grid w-full grid-cols-2" : "grid w-full grid-cols-1"}>
+        <TabsList
+          className={canInviteMembers ? 'grid w-full grid-cols-2' : 'grid w-full grid-cols-1'}
+        >
           <TabsTrigger value="members">Team Members</TabsTrigger>
-          {canInviteMembers && (
-            <TabsTrigger value="add-members">Add Members</TabsTrigger>
-          )}
+          {canInviteMembers && <TabsTrigger value="add-members">Add Members</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="members" className="space-y-6">
@@ -220,26 +236,26 @@ export default function TeamPage() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{stats.totalMembers}</div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {stats.activeMembers} active
-                </p>
+                <p className="text-xs text-muted-foreground mt-1">{stats.activeMembers} active</p>
               </CardContent>
             </Card>
-            {Object.entries(stats.roleBreakdown).slice(0, 3).map(([role, count]) => (
-              <Card key={role}>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-medium">
-                    {ROLE_CONFIG[role as keyof typeof ROLE_CONFIG]?.label || role}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{count}</div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {((count / stats.totalMembers) * 100).toFixed(0)}% of team
-                  </p>
-                </CardContent>
-              </Card>
-            ))}
+            {Object.entries(stats.roleBreakdown)
+              .slice(0, 3)
+              .map(([role, count]) => (
+                <Card key={role}>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium">
+                      {ROLE_CONFIG[role as keyof typeof ROLE_CONFIG]?.label || role}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{count}</div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {((count / stats.totalMembers) * 100).toFixed(0)}% of team
+                    </p>
+                  </CardContent>
+                </Card>
+              ))}
           </div>
 
           {/* Resource Allocation */}
@@ -303,59 +319,78 @@ export default function TeamPage() {
                       <TableHead>Member</TableHead>
                       <TableHead>Role</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead>Workload</TableHead>
                       <TableHead>Contact</TableHead>
                       <TableHead>Joined</TableHead>
-                      {canInviteMembers && (
-                        <TableHead className="text-right">Actions</TableHead>
-                      )}
+                      {canInviteMembers && <TableHead className="text-right">Actions</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredMembers.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={canInviteMembers ? 6 : 5} className="text-center py-8">
-                          <div className="text-muted-foreground">
-                            No team members found
-                          </div>
+                        <TableCell colSpan={canInviteMembers ? 7 : 6} className="text-center py-8">
+                          <div className="text-muted-foreground">No team members found</div>
                         </TableCell>
                       </TableRow>
                     ) : (
                       filteredMembers.map((member) => {
                         const isCurrentUser = member.userId === user?.$id;
+                        const memberCounts = taskCounts?.get(member.userId);
+                        const activeTasks = memberCounts?.activeTasks || 0;
+                        const overdueTasks = memberCounts?.overdueTasks || 0;
+                        const completedTasks = memberCounts?.completedTasks || 0;
+                        const workload = getWorkloadLevel(activeTasks);
 
                         return (
                           <TableRow key={member.$id}>
                             <TableCell>
                               <div className="flex items-center gap-3">
                                 {/* Avatar with conditional ring for current user */}
-                                <div className={cn(
-                                  "relative",
-                                  isCurrentUser && "p-1 rounded-full bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 shadow-lg shadow-purple-500/50 animate-pulse"
-                                )}>
-                                  <Avatar className={cn(
-                                    "h-10 w-10",
-                                    isCurrentUser && "ring-4 ring-background"
-                                  )}>
+                                <div
+                                  className={cn(
+                                    'relative',
+                                    isCurrentUser &&
+                                      'p-1 rounded-full bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 shadow-lg shadow-purple-500/50 animate-pulse'
+                                  )}
+                                >
+                                  <Avatar
+                                    className={cn(
+                                      'h-10 w-10',
+                                      isCurrentUser && 'ring-4 ring-background'
+                                    )}
+                                  >
                                     <AvatarImage src={member.avatar} alt={member.name} />
-                                    <AvatarFallback className={cn(
-                                      isCurrentUser && "bg-gradient-to-br from-blue-100 to-purple-100 dark:from-blue-900 dark:to-purple-900 font-bold"
-                                    )}>
-                                      {member.name.split(' ').map(n => n[0]).join('').toUpperCase()}
+                                    <AvatarFallback
+                                      className={cn(
+                                        isCurrentUser &&
+                                          'bg-gradient-to-br from-blue-100 to-purple-100 dark:from-blue-900 dark:to-purple-900 font-bold'
+                                      )}
+                                    >
+                                      {member.name
+                                        .split(' ')
+                                        .map((n) => n[0])
+                                        .join('')
+                                        .toUpperCase()}
                                     </AvatarFallback>
                                   </Avatar>
                                 </div>
                                 <div>
                                   <div className="font-medium flex items-center gap-2">
-                                    <span className={cn(isCurrentUser && "font-bold text-primary")}>
+                                    <span className={cn(isCurrentUser && 'font-bold text-primary')}>
                                       {member.name}
                                     </span>
                                     {isCurrentUser && (
-                                      <Badge variant="default" className="text-xs bg-gradient-to-r from-blue-500 to-purple-500 font-semibold">
+                                      <Badge
+                                        variant="default"
+                                        className="text-xs bg-gradient-to-r from-blue-500 to-purple-500 font-semibold"
+                                      >
                                         You
                                       </Badge>
                                     )}
                                   </div>
-                                  <div className="text-sm text-muted-foreground">{member.email}</div>
+                                  <div className="text-sm text-muted-foreground">
+                                    {member.email}
+                                  </div>
                                 </div>
                               </div>
                             </TableCell>
@@ -368,6 +403,27 @@ export default function TeamPage() {
                               <Badge className={STATUS_CONFIG[member.status].color}>
                                 {STATUS_CONFIG[member.status].label}
                               </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex flex-col gap-1">
+                                <div className="flex items-center gap-2">
+                                  <Badge
+                                    variant="outline"
+                                    className={cn('text-xs', workload.color)}
+                                  >
+                                    {workload.label}
+                                  </Badge>
+                                  <span className="text-sm font-medium">{activeTasks} active</span>
+                                </div>
+                                <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                                  <span>{completedTasks} done</span>
+                                  {overdueTasks > 0 && (
+                                    <span className="text-red-500 font-medium">
+                                      {overdueTasks} overdue
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
                             </TableCell>
                             <TableCell>
                               <div className="flex flex-col gap-1 text-sm">
@@ -388,7 +444,7 @@ export default function TeamPage() {
                             </TableCell>
                             <TableCell className="text-right">
                               {/* Only show actions if user has edit/remove permissions */}
-                              {(canInviteMembers) && (
+                              {canInviteMembers && (
                                 <DropdownMenu>
                                   <DropdownMenuTrigger asChild>
                                     <Button variant="ghost" size="sm">
@@ -402,7 +458,10 @@ export default function TeamPage() {
                                       <Edit className="h-4 w-4 mr-2" />
                                       Edit Member
                                     </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => handleDeleteMember(member)} className="text-red-600">
+                                    <DropdownMenuItem
+                                      onClick={() => handleDeleteMember(member)}
+                                      className="text-red-600"
+                                    >
                                       <Trash2 className="h-4 w-4 mr-2" />
                                       Remove Member
                                     </DropdownMenuItem>
@@ -437,21 +496,14 @@ export default function TeamPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Edit Team Member</DialogTitle>
-            <DialogDescription>
-              Update member details and permissions
-            </DialogDescription>
+            <DialogDescription>Update member details and permissions</DialogDescription>
           </DialogHeader>
           {editingMember && (
             <form onSubmit={handleUpdateMember}>
               <div className="space-y-4">
                 <div>
                   <Label htmlFor="name">Name</Label>
-                  <Input
-                    id="name"
-                    name="name"
-                    defaultValue={editingMember.name}
-                    required
-                  />
+                  <Input id="name" name="name" defaultValue={editingMember.name} required />
                 </div>
                 <div>
                   <Label htmlFor="email">Email</Label>
@@ -465,12 +517,7 @@ export default function TeamPage() {
                 </div>
                 <div>
                   <Label htmlFor="phone">Phone</Label>
-                  <Input
-                    id="phone"
-                    name="phone"
-                    type="tel"
-                    defaultValue={editingMember.phone}
-                  />
+                  <Input id="phone" name="phone" type="tel" defaultValue={editingMember.phone} />
                 </div>
                 <div>
                   <Label htmlFor="role">Role</Label>
@@ -504,11 +551,7 @@ export default function TeamPage() {
                 </div>
               </div>
               <DialogFooter className="mt-6">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setIsEditDialogOpen(false)}
-                >
+                <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
                   Cancel
                 </Button>
                 <Button type="submit" disabled={updateMember.isPending}>

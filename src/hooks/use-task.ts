@@ -2,15 +2,92 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { databases } from '@/lib/appwrite-client';
 import { Query, ID } from 'appwrite';
 import type { Task, TaskStatus, TaskPriority, FunctionalRequirement } from '@/types';
-import { toast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import { createBulkNotifications } from '@/hooks/use-notification';
 import { generateTaskId, generateTaskIdWithoutFR } from '@/lib/hierarchy-id-generator';
 
 const DATABASE_ID = process.env.NEXT_PUBLIC_APPWRITE_DATABASE_ID!;
 const TASKS_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_TASKS_COLLECTION_ID!;
-const FUNCTIONAL_REQUIREMENTS_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_FUNCTIONAL_REQUIREMENTS_COLLECTION_ID!;
+const FUNCTIONAL_REQUIREMENTS_COLLECTION_ID =
+  process.env.NEXT_PUBLIC_APPWRITE_FUNCTIONAL_REQUIREMENTS_COLLECTION_ID!;
+const REQUIREMENTS_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_REQUIREMENTS_COLLECTION_ID!;
+const EPICS_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_EPICS_COLLECTION_ID!;
 const SPRINTS_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_SPRINTS_COLLECTION_ID!;
 const PROJECTS_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_PROJECTS_COLLECTION_ID!;
+
+// ✅ Helper: Update FR and Epic progress based on task completion
+async function updateParentProgress(task: Task) {
+  console.log('updateParentProgress called with task:', {
+    taskId: task.$id,
+    functionalRequirementId: task.functionalRequirementId,
+    epicId: task.epicId,
+    status: task.status,
+  });
+
+  try {
+    // Update FR progress if task is linked to an FR
+    if (task.functionalRequirementId) {
+      // Get all tasks for this FR
+      const frTasks = await databases.listDocuments(DATABASE_ID, TASKS_COLLECTION_ID, [
+        Query.equal('functionalRequirementId', task.functionalRequirementId),
+        Query.limit(100),
+      ]);
+
+      if (frTasks.total > 0) {
+        const completedTasks = frTasks.documents.filter((t: any) => t.status === 'DONE').length;
+        const progress = Math.round((completedTasks / frTasks.total) * 100);
+
+        console.log('Updating FR progress:', {
+          frId: task.functionalRequirementId,
+          totalTasks: frTasks.total,
+          completedTasks,
+          progress,
+        });
+
+        // Update FR progress
+        await databases.updateDocument(
+          DATABASE_ID,
+          REQUIREMENTS_COLLECTION_ID,
+          task.functionalRequirementId,
+          { progress }
+        );
+      }
+    }
+
+    // Update Epic progress if task is linked to an Epic
+    if (task.epicId) {
+      // Get all tasks for this Epic
+      const epicTasks = await databases.listDocuments(DATABASE_ID, TASKS_COLLECTION_ID, [
+        Query.equal('epicId', task.epicId),
+        Query.limit(100),
+      ]);
+
+      if (epicTasks.total > 0) {
+        const completedTasks = epicTasks.documents.filter((t: any) => t.status === 'DONE').length;
+        const progress = Math.round((completedTasks / epicTasks.total) * 100);
+
+        // Update Epic progress and status
+        const epicStatus = progress === 100 ? 'DONE' : progress > 0 ? 'IN_PROGRESS' : 'TODO';
+
+        console.log('Updating Epic progress:', {
+          epicId: task.epicId,
+          totalTasks: epicTasks.total,
+          completedTasks,
+          progress,
+          epicStatus,
+        });
+
+        await databases.updateDocument(DATABASE_ID, EPICS_COLLECTION_ID, task.epicId, {
+          progress,
+          status: epicStatus,
+        });
+      }
+    }
+  } catch (error) {
+    console.error('Failed to update parent progress:', error);
+    // Don't throw - progress update is not critical
+  }
+}
 
 export function useTasks(projectId?: string) {
   return useQuery({
@@ -18,24 +95,40 @@ export function useTasks(projectId?: string) {
     queryFn: async () => {
       if (!projectId) return [];
 
-      const response = await databases.listDocuments(
-        DATABASE_ID,
-        TASKS_COLLECTION_ID,
-        [Query.equal('projectId', projectId), Query.orderAsc('position')]
-      );
+      const response = await databases.listDocuments(DATABASE_ID, TASKS_COLLECTION_ID, [
+        Query.equal('projectId', projectId),
+        Query.orderAsc('position'),
+      ]);
 
       // Parse JSON fields
-      const tasks = response.documents.map(doc => ({
+      const tasks = response.documents.map((doc) => ({
         ...doc,
         labels: typeof doc.labels === 'string' && doc.labels ? JSON.parse(doc.labels) : [],
-        attachments: typeof doc.attachments === 'string' && doc.attachments ? JSON.parse(doc.attachments) : [],
-        customFields: typeof doc.customFields === 'string' && doc.customFields ? JSON.parse(doc.customFields) : {},
-        assigneeIds: typeof doc.assigneeIds === 'string' && doc.assigneeIds ? JSON.parse(doc.assigneeIds) : [],
+        attachments:
+          typeof doc.attachments === 'string' && doc.attachments ? JSON.parse(doc.attachments) : [],
+        customFields:
+          typeof doc.customFields === 'string' && doc.customFields
+            ? JSON.parse(doc.customFields)
+            : {},
+        assigneeIds:
+          typeof doc.assigneeIds === 'string' && doc.assigneeIds ? JSON.parse(doc.assigneeIds) : [],
         // ✅ assignedTo and assignedToNames are array types in DB - use directly
-        assignedTo: Array.isArray(doc.assignedTo) ? doc.assignedTo : [],
+        assignedTo: Array.isArray(doc.assignedTo)
+          ? doc.assignedTo
+          : Array.isArray(doc.assigneeIds)
+            ? doc.assigneeIds
+            : [],
         assignedToNames: Array.isArray(doc.assignedToNames) ? doc.assignedToNames : [],
-        blockedBy: doc.blockedBy ? (typeof doc.blockedBy === 'string' ? JSON.parse(doc.blockedBy) : doc.blockedBy) : [],
-        blocks: doc.blocks ? (typeof doc.blocks === 'string' ? JSON.parse(doc.blocks) : doc.blocks) : [],
+        blockedBy: doc.blockedBy
+          ? typeof doc.blockedBy === 'string'
+            ? JSON.parse(doc.blockedBy)
+            : doc.blockedBy
+          : [],
+        blocks: doc.blocks
+          ? typeof doc.blocks === 'string'
+            ? JSON.parse(doc.blocks)
+            : doc.blocks
+          : [],
       })) as unknown as Task[];
 
       return tasks;
@@ -51,24 +144,37 @@ export function useWorkspaceTasks(workspaceId?: string) {
     queryFn: async () => {
       if (!workspaceId) return [];
 
-      const response = await databases.listDocuments(
-        DATABASE_ID,
-        TASKS_COLLECTION_ID,
-        [Query.equal('workspaceId', workspaceId), Query.orderDesc('$createdAt'), Query.limit(1000)]
-      );
+      const response = await databases.listDocuments(DATABASE_ID, TASKS_COLLECTION_ID, [
+        Query.equal('workspaceId', workspaceId),
+        Query.orderDesc('$createdAt'),
+        Query.limit(1000),
+      ]);
 
       // Parse JSON fields
-      const tasks = response.documents.map(doc => ({
+      const tasks = response.documents.map((doc) => ({
         ...doc,
         labels: typeof doc.labels === 'string' && doc.labels ? JSON.parse(doc.labels) : [],
-        attachments: typeof doc.attachments === 'string' && doc.attachments ? JSON.parse(doc.attachments) : [],
-        customFields: typeof doc.customFields === 'string' && doc.customFields ? JSON.parse(doc.customFields) : {},
-        assigneeIds: typeof doc.assigneeIds === 'string' && doc.assigneeIds ? JSON.parse(doc.assigneeIds) : [],
+        attachments:
+          typeof doc.attachments === 'string' && doc.attachments ? JSON.parse(doc.attachments) : [],
+        customFields:
+          typeof doc.customFields === 'string' && doc.customFields
+            ? JSON.parse(doc.customFields)
+            : {},
+        assigneeIds:
+          typeof doc.assigneeIds === 'string' && doc.assigneeIds ? JSON.parse(doc.assigneeIds) : [],
         // ✅ assignedTo and assignedToNames are array types in DB - use directly
         assignedTo: Array.isArray(doc.assignedTo) ? doc.assignedTo : [],
         assignedToNames: Array.isArray(doc.assignedToNames) ? doc.assignedToNames : [],
-        blockedBy: doc.blockedBy ? (typeof doc.blockedBy === 'string' ? JSON.parse(doc.blockedBy) : doc.blockedBy) : [],
-        blocks: doc.blocks ? (typeof doc.blocks === 'string' ? JSON.parse(doc.blocks) : doc.blocks) : [],
+        blockedBy: doc.blockedBy
+          ? typeof doc.blockedBy === 'string'
+            ? JSON.parse(doc.blockedBy)
+            : doc.blockedBy
+          : [],
+        blocks: doc.blocks
+          ? typeof doc.blocks === 'string'
+            ? JSON.parse(doc.blocks)
+            : doc.blocks
+          : [],
       })) as unknown as Task[];
 
       return tasks;
@@ -83,24 +189,38 @@ export function useTask(taskId?: string) {
     queryFn: async () => {
       if (!taskId) return null;
 
-      const response = await databases.getDocument(
-        DATABASE_ID,
-        TASKS_COLLECTION_ID,
-        taskId
-      );
+      const response = await databases.getDocument(DATABASE_ID, TASKS_COLLECTION_ID, taskId);
 
       // Parse JSON fields
       const task = {
         ...response,
-        labels: typeof response.labels === 'string' && response.labels ? JSON.parse(response.labels) : [],
-        attachments: typeof response.attachments === 'string' && response.attachments ? JSON.parse(response.attachments) : [],
-        customFields: typeof response.customFields === 'string' && response.customFields ? JSON.parse(response.customFields) : {},
-        assigneeIds: typeof response.assigneeIds === 'string' && response.assigneeIds ? JSON.parse(response.assigneeIds) : [],
+        labels:
+          typeof response.labels === 'string' && response.labels ? JSON.parse(response.labels) : [],
+        attachments:
+          typeof response.attachments === 'string' && response.attachments
+            ? JSON.parse(response.attachments)
+            : [],
+        customFields:
+          typeof response.customFields === 'string' && response.customFields
+            ? JSON.parse(response.customFields)
+            : {},
+        assigneeIds:
+          typeof response.assigneeIds === 'string' && response.assigneeIds
+            ? JSON.parse(response.assigneeIds)
+            : [],
         // ✅ assignedTo and assignedToNames are array types in DB - use directly
         assignedTo: Array.isArray(response.assignedTo) ? response.assignedTo : [],
         assignedToNames: Array.isArray(response.assignedToNames) ? response.assignedToNames : [],
-        blockedBy: response.blockedBy ? (typeof response.blockedBy === 'string' ? JSON.parse(response.blockedBy) : response.blockedBy) : [],
-        blocks: response.blocks ? (typeof response.blocks === 'string' ? JSON.parse(response.blocks) : response.blocks) : [],
+        blockedBy: response.blockedBy
+          ? typeof response.blockedBy === 'string'
+            ? JSON.parse(response.blockedBy)
+            : response.blockedBy
+          : [],
+        blocks: response.blocks
+          ? typeof response.blocks === 'string'
+            ? JSON.parse(response.blocks)
+            : response.blocks
+          : [],
       } as unknown as Task;
 
       return task;
@@ -116,26 +236,35 @@ export function useTasksByFunctionalRequirement(functionalRequirementId?: string
     queryFn: async () => {
       if (!functionalRequirementId) return [];
 
-      const response = await databases.listDocuments(
-        DATABASE_ID,
-        TASKS_COLLECTION_ID,
-        [
-          Query.equal('functionalRequirementId', functionalRequirementId),
-          Query.orderAsc('position')
-        ]
-      );
+      const response = await databases.listDocuments(DATABASE_ID, TASKS_COLLECTION_ID, [
+        Query.equal('functionalRequirementId', functionalRequirementId),
+        Query.orderAsc('position'),
+      ]);
 
       // Parse JSON fields
-      const tasks = response.documents.map(doc => ({
+      const tasks = response.documents.map((doc) => ({
         ...doc,
         labels: typeof doc.labels === 'string' && doc.labels ? JSON.parse(doc.labels) : [],
-        attachments: typeof doc.attachments === 'string' && doc.attachments ? JSON.parse(doc.attachments) : [],
-        customFields: typeof doc.customFields === 'string' && doc.customFields ? JSON.parse(doc.customFields) : {},
-        assigneeIds: typeof doc.assigneeIds === 'string' && doc.assigneeIds ? JSON.parse(doc.assigneeIds) : [],
+        attachments:
+          typeof doc.attachments === 'string' && doc.attachments ? JSON.parse(doc.attachments) : [],
+        customFields:
+          typeof doc.customFields === 'string' && doc.customFields
+            ? JSON.parse(doc.customFields)
+            : {},
+        assigneeIds:
+          typeof doc.assigneeIds === 'string' && doc.assigneeIds ? JSON.parse(doc.assigneeIds) : [],
         assignedTo: Array.isArray(doc.assignedTo) ? doc.assignedTo : [],
         assignedToNames: Array.isArray(doc.assignedToNames) ? doc.assignedToNames : [],
-        blockedBy: doc.blockedBy ? (typeof doc.blockedBy === 'string' ? JSON.parse(doc.blockedBy) : doc.blockedBy) : [],
-        blocks: doc.blocks ? (typeof doc.blocks === 'string' ? JSON.parse(doc.blocks) : doc.blocks) : [],
+        blockedBy: doc.blockedBy
+          ? typeof doc.blockedBy === 'string'
+            ? JSON.parse(doc.blockedBy)
+            : doc.blockedBy
+          : [],
+        blocks: doc.blocks
+          ? typeof doc.blocks === 'string'
+            ? JSON.parse(doc.blocks)
+            : doc.blocks
+          : [],
       })) as unknown as Task[];
 
       return tasks;
@@ -175,11 +304,9 @@ export function useCreateTask() {
       }
 
       // Get current tasks for counting
-      const existingTasks = await databases.listDocuments(
-        DATABASE_ID,
-        TASKS_COLLECTION_ID,
-        [Query.equal('projectId', data.projectId)]
-      );
+      const existingTasks = await databases.listDocuments(DATABASE_ID, TASKS_COLLECTION_ID, [
+        Query.equal('projectId', data.projectId),
+      ]);
 
       let hierarchyId: string;
 
@@ -193,20 +320,24 @@ export function useCreateTask() {
         const parentHierarchyId = parentTask.hierarchyId;
 
         const siblings = existingTasks.documents.filter(
-          t => t.parentTaskId === data.parentTaskId
+          (t) => t.parentTaskId === data.parentTaskId
         );
         const subtaskNumber = (siblings.length + 1).toString().padStart(2, '0');
         hierarchyId = `${parentHierarchyId}.${subtaskNumber}`;
       } else {
         // Top-level task: generate from FR → Sprint → Task hierarchy
-        const topLevelTasks = existingTasks.documents.filter(t => !t.parentTaskId);
+        const topLevelTasks = existingTasks.documents.filter((t) => !t.parentTaskId);
         const taskSequence = topLevelTasks.length + 1;
 
         if (data.functionalRequirementId && data.sprintId) {
           // Full hierarchy: FR → Sprint → Task
           try {
             const [fr, sprint] = await Promise.all([
-              databases.getDocument(DATABASE_ID, FUNCTIONAL_REQUIREMENTS_COLLECTION_ID, data.functionalRequirementId),
+              databases.getDocument(
+                DATABASE_ID,
+                FUNCTIONAL_REQUIREMENTS_COLLECTION_ID,
+                data.functionalRequirementId
+              ),
               databases.getDocument(DATABASE_ID, SPRINTS_COLLECTION_ID, data.sprintId),
             ]);
 
@@ -329,17 +460,12 @@ export function useCreateTask() {
         }
       }
 
-      toast({
-        title: 'Success',
-        description: 'Task created successfully!',
-      });
+      toast.success('Task created successfully!');
     },
     onError: (error: Error) => {
-      toast({
-        title: 'Error',
-        description: (error instanceof Error ? error.message : String(error)) || 'Failed to create task',
-        variant: 'destructive',
-      });
+      toast.error(
+        (error instanceof Error ? error.message : String(error)) || 'Failed to create task'
+      );
     },
   });
 }
@@ -352,8 +478,31 @@ export function useUpdateTask() {
       taskId: string;
       projectId: string;
       updates: Partial<Task>;
+      currentUserRole?: string; // ✅ Pass user role for permission check
     }) => {
-      const { taskId, updates } = data;
+      const { taskId, updates, currentUserRole } = data;
+
+      // ✅ Check permission for status changes to DONE
+      if (updates.status === 'DONE') {
+        // Get current task to check its status
+        const currentTask = await databases.getDocument(DATABASE_ID, TASKS_COLLECTION_ID, taskId);
+
+        // ✅ ENFORCE: Tasks must be in REVIEW before marking as DONE
+        if (currentTask.status !== 'REVIEW') {
+          toast.warning(
+            'Tasks must be reviewed before marking as done. Please move to Review first.'
+          );
+          return currentTask as unknown as Task; // Return unchanged task
+        }
+
+        // ✅ ENFORCE: Only managers/assistant managers can mark tasks as DONE
+        const role = currentUserRole?.toLowerCase() || '';
+        const canMarkDone = role.includes('manager') || role.includes('admin') || role === 'owner';
+        if (!canMarkDone) {
+          toast.warning('Only managers or assistant managers can mark tasks as done.');
+          return currentTask as unknown as Task; // Return unchanged task
+        }
+      }
 
       // Stringify complex fields if they exist in updates
       const processedUpdates: any = { ...updates };
@@ -373,9 +522,7 @@ export function useUpdateTask() {
       // ✅ Handle assignedTo and assignedToNames as arrays (not strings)
       // These fields are array types in the database
       if (updates.assignedTo !== undefined) {
-        processedUpdates.assignedTo = Array.isArray(updates.assignedTo)
-          ? updates.assignedTo
-          : [];
+        processedUpdates.assignedTo = Array.isArray(updates.assignedTo) ? updates.assignedTo : [];
       }
       if (updates.assignedToNames !== undefined) {
         processedUpdates.assignedToNames = Array.isArray(updates.assignedToNames)
@@ -411,11 +558,7 @@ export function useUpdateTask() {
       // Optimistically update the cache
       queryClient.setQueryData<Task[]>(['tasks', data.projectId], (old) => {
         if (!old) return old;
-        return old.map(task =>
-          task.$id === data.taskId
-            ? { ...task, ...data.updates }
-            : task
-        );
+        return old.map((task) => (task.$id === data.taskId ? { ...task, ...data.updates } : task));
       });
 
       return { previousTasks };
@@ -425,30 +568,38 @@ export function useUpdateTask() {
       if (context?.previousTasks) {
         queryClient.setQueryData(['tasks', variables.projectId], context.previousTasks);
       }
-      toast({
-        title: 'Error',
-        description: (error instanceof Error ? error.message : String(error)) || 'Failed to update task',
-        variant: 'destructive',
-      });
+      toast.error(
+        (error instanceof Error ? error.message : String(error)) || 'Failed to update task'
+      );
     },
     onSuccess: async (updatedTask, variables) => {
       queryClient.invalidateQueries({ queryKey: ['task', variables.taskId] });
       queryClient.invalidateQueries({ queryKey: ['tasks', variables.projectId] });
 
+      // ✅ Update FR and Epic progress if status changed
+      if (variables.updates.status) {
+        await updateParentProgress(updatedTask as unknown as Task);
+        // Invalidate FR and Epic queries to reflect progress
+        queryClient.invalidateQueries({
+          queryKey: ['functional-requirements', variables.projectId],
+        });
+        queryClient.invalidateQueries({ queryKey: ['epics', variables.projectId] });
+      }
+
       // ✅ AUTO-SYNC FR STATUS: If task is linked to FR and status changed, update FR status
       if (updatedTask.functionalRequirementId && variables.updates.status) {
         try {
           // Get all tasks linked to this FR
-          const frTasks = await databases.listDocuments(
-            DATABASE_ID,
-            TASKS_COLLECTION_ID,
-            [Query.equal('functionalRequirementId', updatedTask.functionalRequirementId)]
-          );
+          const frTasks = await databases.listDocuments(DATABASE_ID, TASKS_COLLECTION_ID, [
+            Query.equal('functionalRequirementId', updatedTask.functionalRequirementId),
+          ]);
 
           // Calculate new FR status from all its tasks
           const tasks = frTasks.documents as unknown as Task[];
-          const allDone = tasks.length > 0 && tasks.every(t => t.status === 'DONE');
-          const anyInProgress = tasks.some(t => t.status === 'IN_PROGRESS' || t.status === 'REVIEW');
+          const allDone = tasks.length > 0 && tasks.every((t) => t.status === 'DONE');
+          const anyInProgress = tasks.some(
+            (t) => t.status === 'IN_PROGRESS' || t.status === 'REVIEW'
+          );
 
           let newFRStatus: FunctionalRequirement['status'];
           // If there are no tasks linked, FR should remain or become DRAFT
@@ -477,7 +628,6 @@ export function useUpdateTask() {
           queryClient.invalidateQueries({
             queryKey: ['functional-requirements', variables.projectId],
           });
-
         } catch (error) {
           console.error('Error syncing FR status:', error);
           // Don't fail the task update if FR sync fails
@@ -506,8 +656,14 @@ export function useUpdateTask() {
 
       // Notification for task assignment changes
       if (updates.assigneeIds) {
-        const previousTask = queryClient.getQueryData<Task[]>(['tasks', variables.projectId])
-          ?.find(t => t.$id === variables.taskId);
+        // console.log(updates.assigneeIds);
+
+        const task = await databases.getDocument(DATABASE_ID, TASKS_COLLECTION_ID, updatedTask.$id);
+        console.log(task);
+
+        const previousTask = queryClient
+          .getQueryData<Task[]>(['tasks', variables.projectId])
+          ?.find((t) => t.$id === variables.taskId);
 
         if (previousTask) {
           // Ensure assigneeIds is an array
@@ -522,7 +678,7 @@ export function useUpdateTask() {
             : [];
 
           const newAssignees = updatesAssignees.filter(
-            id => id && typeof id === 'string' && !previousAssignees.includes(id)
+            (id) => id && typeof id === 'string' && !previousAssignees.includes(id)
           );
 
           // Notify newly assigned users
@@ -554,7 +710,9 @@ export function useUpdateTask() {
             ? [assigneesData]
             : [];
 
-        const validAssignees = assignees.filter(id => id && typeof id === 'string' && id.trim() !== '');
+        const validAssignees = assignees.filter(
+          (id) => id && typeof id === 'string' && id.trim() !== ''
+        );
 
         if (validAssignees.length > 0) {
           await createBulkNotifications({
@@ -574,10 +732,7 @@ export function useUpdateTask() {
         }
       }
 
-      toast({
-        title: 'Success',
-        description: 'Task updated successfully!',
-      });
+      toast.success('Task updated successfully!');
     },
   });
 }
@@ -591,15 +746,35 @@ export function useUpdateTaskStatus() {
       projectId: string;
       status: TaskStatus;
       position: number;
+      currentUserRole?: string; // ✅ Pass user role for permission check
     }) => {
-      const { taskId, status, position } = data;
+      const { taskId, status, position, currentUserRole } = data;
 
-      const response = await databases.updateDocument(
-        DATABASE_ID,
-        TASKS_COLLECTION_ID,
-        taskId,
-        { status, position }
-      );
+      // ✅ Get current task to check its status
+      const currentTask = await databases.getDocument(DATABASE_ID, TASKS_COLLECTION_ID, taskId);
+
+      // ✅ ENFORCE: Tasks must be in REVIEW before marking as DONE
+      if (status === 'DONE' && currentTask.status !== 'REVIEW') {
+        toast.warning(
+          'Tasks must be reviewed before marking as done. Please move to Review first.'
+        );
+        return currentTask as unknown as Task; // Return unchanged task
+      }
+
+      // ✅ ENFORCE: Only managers/assistant managers can mark tasks as DONE
+      if (status === 'DONE') {
+        const role = currentUserRole?.toLowerCase() || '';
+        const canMarkDone = role.includes('manager') || role.includes('admin') || role === 'owner';
+        if (!canMarkDone) {
+          toast.warning('Only managers or assistant managers can mark tasks as done.');
+          return currentTask as unknown as Task; // Return unchanged task
+        }
+      }
+
+      const response = await databases.updateDocument(DATABASE_ID, TASKS_COLLECTION_ID, taskId, {
+        status,
+        position,
+      });
 
       return response as unknown as Task;
     },
@@ -613,7 +788,7 @@ export function useUpdateTaskStatus() {
       // Optimistically update the cache
       queryClient.setQueryData<Task[]>(['tasks', data.projectId], (old) => {
         if (!old) return old;
-        return old.map(task =>
+        return old.map((task) =>
           task.$id === data.taskId
             ? { ...task, status: data.status, position: data.position }
             : task
@@ -627,15 +802,21 @@ export function useUpdateTaskStatus() {
       if (context?.previousTasks) {
         queryClient.setQueryData(['tasks', variables.projectId], context.previousTasks);
       }
-      toast({
-        title: 'Error',
-        description: (error instanceof Error ? error.message : String(error)) || 'Failed to update task status',
-        variant: 'destructive',
-      });
+      toast.error(
+        (error instanceof Error ? error.message : String(error)) || 'Failed to update task status'
+      );
     },
     onSuccess: async (updatedTask, variables) => {
+      console.log('useUpdateTaskStatus onSuccess - updatedTask:', updatedTask);
+
       // Silent success, already updated optimistically
       queryClient.invalidateQueries({ queryKey: ['tasks', variables.projectId] });
+
+      // ✅ Update FR and Epic progress based on task completion
+      await updateParentProgress(updatedTask as unknown as Task);
+      // Invalidate FR and Epic queries to reflect progress
+      queryClient.invalidateQueries({ queryKey: ['functional-requirements', variables.projectId] });
+      queryClient.invalidateQueries({ queryKey: ['epics', variables.projectId] });
 
       // Fetch project name for notifications
       let projectName = updatedTask.projectId;
@@ -654,7 +835,8 @@ export function useUpdateTaskStatus() {
       if (variables.status === 'DONE') {
         try {
           // Query workspace members to find managers/admins
-          const WORKSPACE_MEMBERS_COLLECTION_ID = process.env.NEXT_PUBLIC_APPWRITE_COLLECTION_WORKSPACE_MEMBERS_ID!;
+          const WORKSPACE_MEMBERS_COLLECTION_ID =
+            process.env.NEXT_PUBLIC_APPWRITE_COLLECTION_WORKSPACE_MEMBERS_ID!;
           const membersResponse = await databases.listDocuments(
             DATABASE_ID,
             WORKSPACE_MEMBERS_COLLECTION_ID,
@@ -687,14 +869,141 @@ export function useUpdateTaskStatus() {
               },
             });
           }
+
+          // ✅ Notify assignees that their task has been reviewed and marked as done
+          const assigneesData = updatedTask.assigneeIds || updatedTask.assignedTo || [];
+          const assignees = Array.isArray(assigneesData)
+            ? assigneesData
+            : typeof assigneesData === 'string'
+              ? JSON.parse(assigneesData)
+              : [];
+          const validAssignees = assignees.filter(
+            (id: string) => id && typeof id === 'string' && id.trim() !== ''
+          );
+
+          if (validAssignees.length > 0) {
+            // Find the reviewer name (manager who marked it done)
+            const currentUserId = variables.currentUserRole ? undefined : undefined; // We don't have the user ID directly
+
+            await createBulkNotifications({
+              workspaceId: updatedTask.workspaceId || '',
+              userIds: validAssignees,
+              type: 'TASK_REVIEWED_DONE',
+              data: {
+                taskId: updatedTask.$id,
+                taskTitle: updatedTask.title,
+                taskHierarchyId: updatedTask.hierarchyId,
+                projectId: updatedTask.projectId,
+                projectName: projectName,
+                reviewerName: 'Manager', // Could be enhanced to pass actual reviewer name
+                entityType: 'TASK',
+              },
+            });
+          }
         } catch (error) {
           // Don't fail status update if notification fails
           console.error('Failed to send completion notifications:', error);
         }
       }
 
-      // Create notification for status changes (except to DONE, already handled)
-      if (variables.status !== 'DONE') {
+      // ✅ Notify managers when task moves to REVIEW
+      if (variables.status === 'REVIEW') {
+        try {
+          const WORKSPACE_MEMBERS_COLLECTION_ID =
+            process.env.NEXT_PUBLIC_APPWRITE_COLLECTION_WORKSPACE_MEMBERS_ID!;
+          const membersResponse = await databases.listDocuments(
+            DATABASE_ID,
+            WORKSPACE_MEMBERS_COLLECTION_ID,
+            [Query.equal('workspaceId', updatedTask.workspaceId)]
+          );
+
+          // Filter for managers and assistant managers
+          const managers = membersResponse.documents
+            .filter((member: any) => {
+              const role = member.role?.toLowerCase() || '';
+              return role.includes('manager') || role.includes('admin') || role === 'owner';
+            })
+            .map((member: any) => member.userId)
+            .filter((userId: string) => userId && userId.trim());
+
+          if (managers.length > 0) {
+            await createBulkNotifications({
+              workspaceId: updatedTask.workspaceId || '',
+              userIds: managers,
+              type: 'TASK_REVIEW_REQUESTED',
+              data: {
+                taskId: updatedTask.$id,
+                taskTitle: updatedTask.title,
+                taskHierarchyId: updatedTask.hierarchyId,
+                projectId: updatedTask.projectId,
+                projectName: projectName,
+                submitterName: updatedTask.createdByName || 'Team Member',
+                entityType: 'TASK',
+              },
+            });
+          }
+        } catch (error) {
+          console.error('Failed to send review notification:', error);
+        }
+      }
+
+      // ✅ Check if all sprint tasks are complete - notify managers to close sprint
+      if (variables.status === 'DONE' && updatedTask.sprintId) {
+        try {
+          const sprintTasks = await databases.listDocuments(DATABASE_ID, TASKS_COLLECTION_ID, [
+            Query.equal('sprintId', updatedTask.sprintId),
+            Query.limit(500),
+          ]);
+
+          const allTasksDone = sprintTasks.documents.every((t: any) => t.status === 'DONE');
+
+          if (allTasksDone && sprintTasks.total > 0) {
+            const WORKSPACE_MEMBERS_COLLECTION_ID =
+              process.env.NEXT_PUBLIC_APPWRITE_COLLECTION_WORKSPACE_MEMBERS_ID!;
+            const membersResponse = await databases.listDocuments(
+              DATABASE_ID,
+              WORKSPACE_MEMBERS_COLLECTION_ID,
+              [Query.equal('workspaceId', updatedTask.workspaceId)]
+            );
+
+            const managers = membersResponse.documents
+              .filter((member: any) => {
+                const role = member.role?.toLowerCase() || '';
+                return role.includes('manager') || role.includes('admin') || role === 'owner';
+              })
+              .map((member: any) => member.userId)
+              .filter((userId: string) => userId && userId.trim());
+
+            if (managers.length > 0) {
+              // Get sprint name
+              const sprint = await databases.getDocument(
+                DATABASE_ID,
+                SPRINTS_COLLECTION_ID,
+                updatedTask.sprintId
+              );
+
+              await createBulkNotifications({
+                workspaceId: updatedTask.workspaceId || '',
+                userIds: managers,
+                type: 'SPRINT_READY_TO_CLOSE',
+                data: {
+                  sprintId: updatedTask.sprintId,
+                  sprintName: sprint.name,
+                  totalTasks: sprintTasks.total,
+                  projectId: updatedTask.projectId,
+                  projectName: projectName,
+                  entityType: 'SPRINT',
+                },
+              });
+            }
+          }
+        } catch (error) {
+          console.error('Failed to check sprint completion:', error);
+        }
+      }
+
+      // Create notification for status changes (except to DONE and REVIEW, already handled)
+      if (variables.status !== 'DONE' && variables.status !== 'REVIEW') {
         // Ensure assignees is always an array
         const assigneesData = updatedTask.assigneeIds || [];
         const assignees = Array.isArray(assigneesData)
@@ -703,7 +1012,9 @@ export function useUpdateTaskStatus() {
             ? [assigneesData]
             : [];
 
-        const validAssignees = assignees.filter(id => id && typeof id === 'string' && id.trim() !== '');
+        const validAssignees = assignees.filter(
+          (id) => id && typeof id === 'string' && id.trim() !== ''
+        );
 
         if (validAssignees.length > 0) {
           await createBulkNotifications({
@@ -731,26 +1042,17 @@ export function useDeleteTask() {
 
   return useMutation({
     mutationFn: async (data: { taskId: string; projectId: string }) => {
-      await databases.deleteDocument(
-        DATABASE_ID,
-        TASKS_COLLECTION_ID,
-        data.taskId
-      );
+      await databases.deleteDocument(DATABASE_ID, TASKS_COLLECTION_ID, data.taskId);
       return data;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['tasks', data.projectId] });
-      toast({
-        title: 'Success',
-        description: 'Task deleted successfully!',
-      });
+      toast.success('Task deleted successfully!');
     },
     onError: (error: Error) => {
-      toast({
-        title: 'Error',
-        description: (error instanceof Error ? error.message : String(error)) || 'Failed to delete task',
-        variant: 'destructive',
-      });
+      toast.error(
+        (error instanceof Error ? error.message : String(error)) || 'Failed to delete task'
+      );
     },
   });
 }
@@ -765,12 +1067,9 @@ export function useReorderTasks() {
     }) => {
       // Update positions for multiple tasks
       const updates = data.tasks.map((task) =>
-        databases.updateDocument(
-          DATABASE_ID,
-          TASKS_COLLECTION_ID,
-          task.taskId,
-          { position: task.position }
-        )
+        databases.updateDocument(DATABASE_ID, TASKS_COLLECTION_ID, task.taskId, {
+          position: task.position,
+        })
       );
 
       await Promise.all(updates);
@@ -780,11 +1079,9 @@ export function useReorderTasks() {
       queryClient.invalidateQueries({ queryKey: ['tasks', data.projectId] });
     },
     onError: (error: Error) => {
-      toast({
-        title: 'Error',
-        description: (error instanceof Error ? error.message : String(error)) || 'Failed to reorder tasks',
-        variant: 'destructive',
-      });
+      toast.error(
+        (error instanceof Error ? error.message : String(error)) || 'Failed to reorder tasks'
+      );
     },
   });
 }
@@ -797,7 +1094,9 @@ export function useAddTaskDependency() {
       // NOTE: Task dependencies disabled due to Appwrite attribute limit
       // The tasks collection has reached its maximum attribute count/size
       // blockedBy and blocks attributes cannot be added
-      throw new Error('Task dependencies are currently disabled due to database limits. Contact admin to upgrade database plan.');
+      throw new Error(
+        'Task dependencies are currently disabled due to database limits. Contact admin to upgrade database plan.'
+      );
 
       /* Original implementation disabled:
       try {
@@ -809,11 +1108,11 @@ export function useAddTaskDependency() {
         );
 
         // Parse dependency arrays
-        const blockedBy = typeof task.blockedBy === 'string' 
-          ? JSON.parse(task.blockedBy || '[]') 
+        const blockedBy = typeof task.blockedBy === 'string'
+          ? JSON.parse(task.blockedBy || '[]')
           : task.blockedBy || [];
-        const blocks = typeof task.blocks === 'string' 
-          ? JSON.parse(task.blocks || '[]') 
+        const blocks = typeof task.blocks === 'string'
+          ? JSON.parse(task.blocks || '[]')
           : task.blocks || [];
 
         // Add dependency
@@ -841,11 +1140,11 @@ export function useAddTaskDependency() {
           data.targetTaskId
         );
 
-        const targetBlockedBy = typeof targetTask.blockedBy === 'string' 
-          ? JSON.parse(targetTask.blockedBy || '[]') 
+        const targetBlockedBy = typeof targetTask.blockedBy === 'string'
+          ? JSON.parse(targetTask.blockedBy || '[]')
           : targetTask.blockedBy || [];
-        const targetBlocks = typeof targetTask.blocks === 'string' 
-          ? JSON.parse(targetTask.blocks || '[]') 
+        const targetBlocks = typeof targetTask.blocks === 'string'
+          ? JSON.parse(targetTask.blocks || '[]')
           : targetTask.blocks || [];
 
         if (data.type === 'blockedBy' && !targetBlocks.includes(data.taskId)) {
@@ -867,7 +1166,7 @@ export function useAddTaskDependency() {
         return data;
       } catch (error: unknown) {
         // Check if error is due to missing attributes
-        if ((error instanceof Error ? error.message : String(error))?.includes('Unknown attribute') && 
+        if ((error instanceof Error ? error.message : String(error))?.includes('Unknown attribute') &&
             ((error instanceof Error ? error.message : String(error))?.includes('blockedBy') || (error instanceof Error ? error.message : String(error))?.includes('blocks'))) {
           throw new Error('Database schema missing dependency attributes. Please add "blockedBy" and "blocks" to Tasks collection. See APPWRITE_SCHEMA_MIGRATION.md');
         }
@@ -877,17 +1176,10 @@ export function useAddTaskDependency() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['workspace-tasks'] });
-      toast({
-        title: 'Dependency added',
-        description: 'Task dependency has been created successfully.',
-      });
+      toast.success('Task dependency has been created successfully.');
     },
     onError: (error: Error) => {
-      toast({
-        title: 'Dependencies disabled',
-        description: (error instanceof Error ? error.message : String(error)),
-        variant: 'destructive',
-      });
+      toast.error(error instanceof Error ? error.message : String(error));
     },
   });
 }
@@ -900,7 +1192,9 @@ export function useRemoveTaskDependency() {
       // NOTE: Task dependencies disabled due to Appwrite attribute limit
       // The tasks collection has reached its maximum attribute count/size
       // blockedBy and blocks attributes cannot be added
-      throw new Error('Task dependencies are currently disabled due to database limits. Contact admin to upgrade database plan.');
+      throw new Error(
+        'Task dependencies are currently disabled due to database limits. Contact admin to upgrade database plan.'
+      );
 
       /* Original implementation disabled:
       // Get current task
@@ -911,11 +1205,11 @@ export function useRemoveTaskDependency() {
       );
 
       // Parse dependency arrays
-      let blockedBy = typeof task.blockedBy === 'string' 
-        ? JSON.parse(task.blockedBy || '[]') 
+      let blockedBy = typeof task.blockedBy === 'string'
+        ? JSON.parse(task.blockedBy || '[]')
         : task.blockedBy || [];
-      let blocks = typeof task.blocks === 'string' 
-        ? JSON.parse(task.blocks || '[]') 
+      let blocks = typeof task.blocks === 'string'
+        ? JSON.parse(task.blocks || '[]')
         : task.blocks || [];
 
       // Remove dependency
@@ -943,11 +1237,11 @@ export function useRemoveTaskDependency() {
         data.targetTaskId
       );
 
-      let targetBlockedBy = typeof targetTask.blockedBy === 'string' 
-        ? JSON.parse(targetTask.blockedBy || '[]') 
+      let targetBlockedBy = typeof targetTask.blockedBy === 'string'
+        ? JSON.parse(targetTask.blockedBy || '[]')
         : targetTask.blockedBy || [];
-      let targetBlocks = typeof targetTask.blocks === 'string' 
-        ? JSON.parse(targetTask.blocks || '[]') 
+      let targetBlocks = typeof targetTask.blocks === 'string'
+        ? JSON.parse(targetTask.blocks || '[]')
         : targetTask.blocks || [];
 
       if (data.type === 'blockedBy') {
@@ -971,18 +1265,10 @@ export function useRemoveTaskDependency() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['workspace-tasks'] });
-      toast({
-        title: 'Dependency removed',
-        description: 'Task dependency has been removed successfully.',
-      });
+      toast.success('Task dependency has been removed successfully.');
     },
     onError: (error: Error) => {
-      toast({
-        title: 'Dependencies disabled',
-        description: (error instanceof Error ? error.message : String(error)),
-        variant: 'destructive',
-      });
+      toast.error(error instanceof Error ? error.message : String(error));
     },
   });
 }
-

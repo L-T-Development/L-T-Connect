@@ -9,6 +9,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { WorkspaceGuard } from '@/components/guards/workspace-guard';
 import { CommandPalette } from '@/components/search/command-palette';
 import { WorkspaceProvider } from '@/components/providers/workspace-provider';
+import { DeadlineReminderChecker } from '@/components/notifications/deadline-reminder-checker';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -39,6 +40,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const content = (
     <WorkspaceProvider>
       <TooltipProvider>
+        {/* Background deadline reminder checker */}
+        <DeadlineReminderChecker />
+
         <div className="flex min-h-screen bg-background">
           {/* Global Command Palette (Cmd+K) */}
           <CommandPalette />

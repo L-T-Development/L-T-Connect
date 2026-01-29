@@ -147,7 +147,9 @@ export function ManageInvitations({ workspaceId, currentUserId }: ManageInvitati
   };
 
   const handleDeleteCode = async (codeId: string) => {
-    if (confirm('Are you sure you want to delete this invite code? This action cannot be undone.')) {
+    if (
+      confirm('Are you sure you want to delete this invite code? This action cannot be undone.')
+    ) {
       try {
         await deleteCode.mutateAsync({ codeId, workspaceId });
       } catch (error) {
@@ -162,7 +164,11 @@ export function ManageInvitations({ workspaceId, currentUserId }: ManageInvitati
       case 'ACTIVE':
         return <Badge variant="default">{status}</Badge>;
       case 'ACCEPTED':
-        return <Badge variant="default" className="bg-green-500">{status}</Badge>;
+        return (
+          <Badge variant="default" className="bg-green-500">
+            {status}
+          </Badge>
+        );
       case 'REJECTED':
         return <Badge variant="destructive">{status}</Badge>;
       case 'EXPIRED':
@@ -258,17 +264,13 @@ export function ManageInvitations({ workspaceId, currentUserId }: ManageInvitati
           <Card>
             <CardHeader>
               <CardTitle>Email Invitations</CardTitle>
-              <CardDescription>
-                Manage email invitations sent to specific people
-              </CardDescription>
+              <CardDescription>Manage email invitations sent to specific people</CardDescription>
             </CardHeader>
             <CardContent>
               {emailInvitations.length === 0 ? (
                 <div className="text-center py-12">
                   <Mail className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <p className="text-sm text-muted-foreground">
-                    No email invitations sent yet
-                  </p>
+                  <p className="text-sm text-muted-foreground">No email invitations sent yet</p>
                 </div>
               ) : (
                 <Table>
@@ -370,9 +372,7 @@ export function ManageInvitations({ workspaceId, currentUserId }: ManageInvitati
           <Card>
             <CardHeader>
               <CardTitle>Invite Codes</CardTitle>
-              <CardDescription>
-                Manage reusable invite codes for your workspace
-              </CardDescription>
+              <CardDescription>Manage reusable invite codes for your workspace</CardDescription>
             </CardHeader>
             <CardContent>
               {inviteCodes.length === 0 ? (
@@ -517,7 +517,9 @@ export function ManageInvitations({ workspaceId, currentUserId }: ManageInvitati
       <Dialog open={revokeDialogOpen} onOpenChange={setRevokeDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Revoke {revokingItem?.type === 'email' ? 'Invitation' : 'Code'}</DialogTitle>
+            <DialogTitle>
+              Revoke {revokingItem?.type === 'email' ? 'Invitation' : 'Code'}
+            </DialogTitle>
             <DialogDescription>
               This will prevent the {revokingItem?.type === 'email' ? 'invitation' : 'code'} from
               being used. Please provide a reason for revoking.
@@ -533,9 +535,10 @@ export function ManageInvitations({ workspaceId, currentUserId }: ManageInvitati
               rows={3}
             />
           </div>
-          <DialogFooter>
+          <DialogFooter className="flex-col-reverse sm:flex-row sm:justify-between sm:space-x-0">
             <Button
               variant="outline"
+              className="mt-2 sm:mt-0"
               onClick={() => {
                 setRevokeDialogOpen(false);
                 setRevokingItem(null);
