@@ -1,6 +1,5 @@
 'use client';
 
-import React from 'react';
 import { Clock, Play, Pause, Square, TrendingUp } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';

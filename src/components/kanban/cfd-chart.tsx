@@ -1,6 +1,5 @@
 'use client';
 
-import React from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Card } from '@/components/ui/card';
 import { TrendingUp } from 'lucide-react';

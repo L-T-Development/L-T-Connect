@@ -206,7 +206,6 @@ export function useStartSprint() {
   return useMutation({
     mutationFn: async ({
       sprintId,
-      projectId,
     }: {
       sprintId: string;
       projectId: string;

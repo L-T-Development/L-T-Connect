@@ -1,6 +1,5 @@
 'use client';
 
-import * as React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Activity, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { cn } from '@/lib/utils';

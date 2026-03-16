@@ -1,6 +1,5 @@
 'use client';
 
-import React from 'react';
 import { Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Line, ComposedChart, ReferenceLine } from 'recharts';
 import { format } from 'date-fns';
 import { TrendingUp, Activity } from 'lucide-react';

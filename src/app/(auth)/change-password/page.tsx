@@ -14,7 +14,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Lock, Eye, EyeOff, Loader2, Shield, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 
-export default function ChangePasswordPage() {
+function ChangePasswordContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user } = useAuth();
@@ -370,5 +370,24 @@ export default function ChangePasswordPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function ChangePasswordFallback() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-background to-muted">
+      <div className="text-center">
+        <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+        <p className="text-muted-foreground">Loading...</p>
+      </div>
+    </div>
+  );
+}
+
+export default function ChangePasswordPage() {
+  return (
+    <React.Suspense fallback={<ChangePasswordFallback />}>
+      <ChangePasswordContent />
+    </React.Suspense>
   );
 }

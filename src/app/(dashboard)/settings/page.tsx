@@ -18,13 +18,12 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Settings as SettingsIcon,
-  Globe,
+  Shield,
   Trash2
 } from "lucide-react";
 import { toast } from "sonner";
 import NotificationPreferences from "@/components/settings/notification-preferences";
 import { useIsManager } from '@/hooks/use-permissions';
-import { Shield } from 'lucide-react';
 
 export default function SettingsPage() {
   const { user } = useAuth();

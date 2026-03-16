@@ -1,6 +1,5 @@
 'use client';
 
-import * as React from 'react';
 import Link from 'next/link';
 import { useCurrentWorkspace } from '@/hooks/use-current-workspace';
 import { useWorkspaceAnalytics } from '@/hooks/use-analytics';

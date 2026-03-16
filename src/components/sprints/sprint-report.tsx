@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef } from 'react';
+import { useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { FileText, Download, Share2, CheckCircle2, TrendingUp, Target, Users } from 'lucide-react';

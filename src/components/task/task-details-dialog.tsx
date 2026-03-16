@@ -5,10 +5,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Calendar, Clock, User, Edit, Trash2, Tag, MessageSquare } from 'lucide-react';
+import { Calendar, Clock, User, Edit, Trash2, Tag } from 'lucide-react';
 import { formatDate, cn } from '@/lib/utils';
 import type { Task } from '@/types';
-import { CommentSection } from '@/components/comments/comment-section';
 import { TaskDependencies } from '@/components/tasks/task-dependencies';
 import { TaskTimeTracking } from '@/components/time-tracking/task-time-tracking';
 import { useTasks, useAddTaskDependency, useRemoveTaskDependency } from '@/hooks/use-task';

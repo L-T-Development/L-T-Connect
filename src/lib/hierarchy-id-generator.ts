@@ -146,8 +146,8 @@ export function generateFRIdStandalone(
 
 /**
  * Generate task hierarchical ID
- * Format: {FRId}-{TaskCode}-{Number}
- * Example: "PTES-RAU-EAU-FRL-01-LOG-01" (Task "Login" under FR)
+ * Format: {FRId}-{SprintCode}-{TaskCode}-{Number}
+ * Example: "PTES-RAU-EAU-FRL-01-SP1-LOG-01" (Task "Login" under FR + Sprint)
  *
  * This format links task to its parent FR for better traceability.
  */
@@ -157,15 +157,18 @@ export function generateTaskId(
   taskName: string,
   sequenceNumber: number
 ): string {
+  const sprintCode = sprintName
+    ? sprintName.replaceAll(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 3)
+    : `S${sequenceNumber.toString().padStart(2, '0')}`;
   const taskCode = extractChars(taskName, 3) || sequenceNumber.toString().padStart(2, '0');
   const seqNum = sequenceNumber.toString().padStart(2, '0');
-  return `${frHierarchyId}-${taskCode}-${seqNum}`;
+  return `${frHierarchyId}-${sprintCode}-${taskCode}-${seqNum}`;
 }
 
 /**
  * Generate task ID when no FR
- * Format: {ProjectCode}-{TaskCode}-{Number}
- * Example: "PTES-LOG-01"
+ * Format: {ProjectCode}-{SprintCode}-{TaskCode}-{Number}
+ * Example: "PTES-SP1-LOG-01"
  */
 export function generateTaskIdWithoutFR(
   projectCode: string,
@@ -175,9 +178,12 @@ export function generateTaskIdWithoutFR(
   sequenceNumber: number
 ): string {
   const projCode = projectCode || extractChars(projectName, 4);
+  const sprintCode = sprintName
+    ? sprintName.replaceAll(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 3)
+    : `S${sequenceNumber.toString().padStart(2, '0')}`;
   const taskCode = extractChars(taskName, 3) || sequenceNumber.toString().padStart(2, '0');
   const seqNum = sequenceNumber.toString().padStart(2, '0');
-  return `${projCode}-${taskCode}-${seqNum}`;
+  return `${projCode}-${sprintCode}-${taskCode}-${seqNum}`;
 }
 
 /**

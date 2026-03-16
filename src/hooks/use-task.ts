@@ -883,8 +883,7 @@ export function useUpdateTaskStatus() {
 
           if (validAssignees.length > 0) {
             // Find the reviewer name (manager who marked it done)
-            const currentUserId = variables.currentUserRole ? undefined : undefined; // We don't have the user ID directly
-
+            
             await createBulkNotifications({
               workspaceId: updatedTask.workspaceId || '',
               userIds: validAssignees,
