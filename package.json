@@ -92,9 +92,6 @@
     "typescript": "^5.3.3"
   },
   "engines": {
-    "node": ">=20"
-  },
-  "overrides": {
-    "jspdf": "3.0.3"
+    "node": "20.x"
   }
 }
