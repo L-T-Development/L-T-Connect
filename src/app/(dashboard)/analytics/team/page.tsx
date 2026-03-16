@@ -1,6 +1,5 @@
 'use client';
 
-import * as React from 'react';
 import { useCurrentWorkspace } from '@/hooks/use-current-workspace';
 import { useTeamAnalytics } from '@/hooks/use-analytics';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
