@@ -5,20 +5,24 @@ import { Calendar, Users, BarChart3 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { LeaveRequestForm } from '@/components/leave/leave-request-form';
 import { LeaveApprovalCard } from '@/components/leave/leave-approval-card';
 import { LeaveBalanceDisplay } from '@/components/leave/leave-balance-display';
 import { useLeaveRequests, useTeamLeaveRequests } from '@/hooks/use-leave';
 import { useAuth } from '@/components/providers/auth-provider';
+import { useCurrentWorkspace } from '@/hooks/use-current-workspace';
 import { LEAVE_STATUS, getLeaveStatusColor, formatLeaveDateRange } from '@/lib/leave-utils';
 
 export default function LeavePage() {
   const { user } = useAuth();
+  const { currentWorkspaceId } = useCurrentWorkspace();
   const [activeTab, setActiveTab] = React.useState('my-leaves');
+  const [isLeaveFormOpen, setIsLeaveFormOpen] = React.useState(false);
 
   const { data: myLeaves = [], isLoading: myLeavesLoading } = useLeaveRequests(user?.$id);
   const { data: teamLeaves = [], isLoading: teamLeavesLoading } = useTeamLeaveRequests(
-    'workspace-id' // You can pass the actual workspace ID here
+    currentWorkspaceId || undefined
   );
 
   // Filter team leaves (exclude own requests)
@@ -51,8 +55,21 @@ export default function LeavePage() {
             Manage your leave requests and view your leave balance
           </p>
         </div>
-        <LeaveRequestForm userId={user.$id} />
+        <Button onClick={() => setIsLeaveFormOpen(true)}>
+          <Calendar className="mr-2 h-4 w-4" />
+          Request Leave
+        </Button>
       </div>
+
+      {/* Leave Request Form Dialog */}
+      {user && (
+        <LeaveRequestForm 
+          open={isLeaveFormOpen}
+          onOpenChange={setIsLeaveFormOpen}
+          userId={user.$id}
+          workspaceId={currentWorkspaceId || ''}
+        />
+      )}
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>

@@ -31,10 +31,7 @@ interface TimeApprovalQueueProps {
   approverId: string;
 }
 
-export function TimeApprovalQueue({
-  workspaceId,
-  approverId,
-}: TimeApprovalQueueProps) {
+export function TimeApprovalQueue({ workspaceId, approverId }: TimeApprovalQueueProps) {
   const [selectedEntry, setSelectedEntry] = useState<TimeEntry | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
   const [isRejectDialogOpen, setIsRejectDialogOpen] = useState(false);
@@ -44,24 +41,36 @@ export function TimeApprovalQueue({
   const rejectEntryMutation = useRejectTimeEntry();
 
   // Group entries by user
-  const groupedEntries = pendingEntries.reduce((acc, entry) => {
-    const userId = entry.userId;
-    if (!acc[userId]) {
-      acc[userId] = {
-        userName: entry.userName,
-        userEmail: entry.userEmail,
-        entries: [],
-        totalHours: 0,
-        billableHours: 0,
-      };
-    }
-    acc[userId].entries.push(entry);
-    acc[userId].totalHours += entry.duration;
-    if (entry.isBillable) {
-      acc[userId].billableHours += entry.duration;
-    }
-    return acc;
-  }, {} as Record<string, { userName: string; userEmail: string; entries: TimeEntry[]; totalHours: number; billableHours: number }>);
+  const groupedEntries = pendingEntries.reduce(
+    (acc, entry) => {
+      const userId = entry.userId;
+      if (!acc[userId]) {
+        acc[userId] = {
+          userName: entry.userName,
+          userEmail: entry.userEmail,
+          entries: [],
+          totalHours: 0,
+          billableHours: 0,
+        };
+      }
+      acc[userId].entries.push(entry);
+      acc[userId].totalHours += entry.duration;
+      if (entry.isBillable) {
+        acc[userId].billableHours += entry.duration;
+      }
+      return acc;
+    },
+    {} as Record<
+      string,
+      {
+        userName: string;
+        userEmail: string;
+        entries: TimeEntry[];
+        totalHours: number;
+        billableHours: number;
+      }
+    >
+  );
 
   const handleApprove = async (entry: TimeEntry) => {
     await approveEntryMutation.mutateAsync({
@@ -114,9 +123,7 @@ export function TimeApprovalQueue({
           <div className="flex flex-col items-center justify-center py-8 text-center">
             <Check className="h-12 w-12 text-green-500 mb-4" />
             <h3 className="text-lg font-semibold mb-2">All Caught Up!</h3>
-            <p className="text-sm text-muted-foreground">
-              No pending time entries to review
-            </p>
+            <p className="text-sm text-muted-foreground">No pending time entries to review</p>
           </div>
         </CardContent>
       </Card>
@@ -150,18 +157,14 @@ export function TimeApprovalQueue({
                       </div>
                       <div>
                         <div className="font-semibold">{userData.userName}</div>
-                        <div className="text-sm text-muted-foreground">
-                          {userData.userEmail}
-                        </div>
+                        <div className="text-sm text-muted-foreground">{userData.userEmail}</div>
                       </div>
                     </div>
                     <div className="text-right">
                       <div className="text-sm text-muted-foreground">
                         {userData.entries.length} entries
                       </div>
-                      <div className="font-semibold">
-                        {formatMinutesHuman(userData.totalHours)}
-                      </div>
+                      <div className="font-semibold">{formatMinutesHuman(userData.totalHours)}</div>
                       <Button
                         variant="outline"
                         size="sm"
@@ -184,8 +187,7 @@ export function TimeApprovalQueue({
                         onApprove={handleApprove}
                         onReject={handleReject}
                         isProcessing={
-                          approveEntryMutation.isPending ||
-                          rejectEntryMutation.isPending
+                          approveEntryMutation.isPending || rejectEntryMutation.isPending
                         }
                       />
                     ))}
@@ -233,9 +235,10 @@ export function TimeApprovalQueue({
             </div>
           )}
 
-          <DialogFooter>
+          <DialogFooter className="flex-col-reverse sm:flex-row sm:justify-between sm:space-x-0">
             <Button
               variant="outline"
+              className="mt-2 sm:mt-0"
               onClick={() => {
                 setIsRejectDialogOpen(false);
                 setRejectionReason('');
@@ -301,9 +304,7 @@ function TimeEntryApprovalCard({
           )}
 
           <div className="flex items-center gap-4 text-sm text-muted-foreground">
-            <span>
-              {format(new Date(entry.startTime), 'PPP')}
-            </span>
+            <span>{format(new Date(entry.startTime), 'PPP')}</span>
             <span>•</span>
             <span>
               {format(new Date(entry.startTime), 'HH:mm')} -{' '}

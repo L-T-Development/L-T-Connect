@@ -14,15 +14,11 @@ export function useNotifications(userId?: string) {
     queryFn: async () => {
       if (!userId) return [];
 
-      const response = await databases.listDocuments(
-        DATABASE_ID,
-        NOTIFICATIONS_COLLECTION_ID,
-        [
-          Query.equal('userId', userId),
-          Query.orderDesc('$createdAt'),
-          Query.limit(50)
-        ]
-      );
+      const response = await databases.listDocuments(DATABASE_ID, NOTIFICATIONS_COLLECTION_ID, [
+        Query.equal('userId', userId),
+        Query.orderDesc('$createdAt'),
+        Query.limit(50),
+      ]);
 
       return response.documents as unknown as Notification[];
     },
@@ -36,15 +32,11 @@ export function useUnreadNotifications(userId?: string) {
     queryFn: async () => {
       if (!userId) return [];
 
-      const response = await databases.listDocuments(
-        DATABASE_ID,
-        NOTIFICATIONS_COLLECTION_ID,
-        [
-          Query.equal('userId', userId),
-          Query.equal('isRead', false),
-          Query.orderDesc('$createdAt')
-        ]
-      );
+      const response = await databases.listDocuments(DATABASE_ID, NOTIFICATIONS_COLLECTION_ID, [
+        Query.equal('userId', userId),
+        Query.equal('isRead', false),
+        Query.orderDesc('$createdAt'),
+      ]);
 
       return response.documents as unknown as Notification[];
     },
@@ -99,13 +91,7 @@ export function useMarkNotificationAsRead() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({
-      notificationId,
-      userId,
-    }: {
-      notificationId: string;
-      userId: string;
-    }) => {
+    mutationFn: async ({ notificationId, userId }: { notificationId: string; userId: string }) => {
       const response = await databases.updateDocument(
         DATABASE_ID,
         NOTIFICATIONS_COLLECTION_ID,
@@ -122,7 +108,9 @@ export function useMarkNotificationAsRead() {
     onError: (error: unknown) => {
       toast({
         title: 'Error',
-        description: (error instanceof Error ? error.message : String(error)) || 'Failed to mark notification as read',
+        description:
+          (error instanceof Error ? error.message : String(error)) ||
+          'Failed to mark notification as read',
         variant: 'destructive',
       });
     },
@@ -142,13 +130,8 @@ export function useMarkAllNotificationsAsRead() {
     }) => {
       // Update all notifications in parallel
       await Promise.all(
-        notificationIds.map(id =>
-          databases.updateDocument(
-            DATABASE_ID,
-            NOTIFICATIONS_COLLECTION_ID,
-            id,
-            { isRead: true }
-          )
+        notificationIds.map((id) =>
+          databases.updateDocument(DATABASE_ID, NOTIFICATIONS_COLLECTION_ID, id, { isRead: true })
         )
       );
 
@@ -164,7 +147,9 @@ export function useMarkAllNotificationsAsRead() {
     onError: (error: unknown) => {
       toast({
         title: 'Error',
-        description: (error instanceof Error ? error.message : String(error)) || 'Failed to mark notifications as read',
+        description:
+          (error instanceof Error ? error.message : String(error)) ||
+          'Failed to mark notifications as read',
         variant: 'destructive',
       });
     },
@@ -175,18 +160,8 @@ export function useDeleteNotification() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({
-      notificationId,
-      userId,
-    }: {
-      notificationId: string;
-      userId: string;
-    }) => {
-      await databases.deleteDocument(
-        DATABASE_ID,
-        NOTIFICATIONS_COLLECTION_ID,
-        notificationId
-      );
+    mutationFn: async ({ notificationId, userId }: { notificationId: string; userId: string }) => {
+      await databases.deleteDocument(DATABASE_ID, NOTIFICATIONS_COLLECTION_ID, notificationId);
       return { userId };
     },
     onSuccess: (data) => {
@@ -199,7 +174,48 @@ export function useDeleteNotification() {
     onError: (error: unknown) => {
       toast({
         title: 'Error',
-        description: (error instanceof Error ? error.message : String(error)) || 'Failed to delete notification',
+        description:
+          (error instanceof Error ? error.message : String(error)) ||
+          'Failed to delete notification',
+        variant: 'destructive',
+      });
+    },
+  });
+}
+
+export function useDeleteAllNotifications() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      userId,
+      notificationIds,
+    }: {
+      userId: string;
+      notificationIds: string[];
+    }) => {
+      // Delete all notifications in parallel
+      await Promise.all(
+        notificationIds.map((id) =>
+          databases.deleteDocument(DATABASE_ID, NOTIFICATIONS_COLLECTION_ID, id)
+        )
+      );
+
+      return { userId };
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['notifications', data.userId] });
+      queryClient.invalidateQueries({ queryKey: ['notifications', 'unread', data.userId] });
+      toast({
+        title: 'All notifications cleared',
+      });
+    },
+    onError: (error: unknown) => {
+      toast({
+        title: 'Error',
+        description:
+          (error instanceof Error ? error.message : String(error)) ||
+          'Failed to clear notifications',
         variant: 'destructive',
       });
     },
@@ -245,7 +261,6 @@ export async function createNotificationFromTemplate({
         message: notifContent.message,
         relatedEntityId: data.taskId || data.sprintId || data.leaveId || '',
         relatedEntityType: data.entityType || '',
-        actionUrl: notifContent.actionUrl || '',
         isRead: false,
       }
     );
@@ -272,7 +287,6 @@ export async function createNotificationFromTemplate({
             email: (user as any).email,
             notificationTitle: notifContent.title,
             notificationMessage: notifContent.message,
-            actionUrl: notifContent.actionUrl ? `${process.env.NEXT_PUBLIC_APP_URL}${notifContent.actionUrl}` : undefined,
           }),
         });
       } catch (error) {
@@ -303,12 +317,16 @@ export async function createBulkNotifications({
   data: any;
 }): Promise<Notification[]> {
   // Ensure userIds is always an array
-  const userIdsArray = Array.isArray(userIds) ? userIds :
-    typeof userIds === 'string' ? [userIds] :
-      [];
+  const userIdsArray = Array.isArray(userIds)
+    ? userIds
+    : typeof userIds === 'string'
+      ? [userIds]
+      : [];
 
   // Filter out empty strings and duplicates
-  const validUserIds = [...new Set(userIdsArray.filter(id => id && typeof id === 'string' && id.trim() !== ''))];
+  const validUserIds = [
+    ...new Set(userIdsArray.filter((id) => id && typeof id === 'string' && id.trim() !== '')),
+  ];
 
   if (validUserIds.length === 0) {
     console.warn('createBulkNotifications called with no valid user IDs');

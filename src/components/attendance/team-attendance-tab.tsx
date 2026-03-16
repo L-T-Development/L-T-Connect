@@ -51,8 +51,8 @@ export function TeamAttendanceTab() {
         if (!teamAttendance) return [];
 
         return teamAttendance.filter((member) => {
-            const matchesSearch = member.userName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                member.userEmail.toLowerCase().includes(searchQuery.toLowerCase());
+            const matchesSearch = (member.userName?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
+                (member.userEmail?.toLowerCase() || '').includes(searchQuery.toLowerCase());
             const matchesStatus = statusFilter === 'ALL' || member.status === statusFilter;
             const matchesRole = roleFilter === 'ALL' || member.role === roleFilter;
 

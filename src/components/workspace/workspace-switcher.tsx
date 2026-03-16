@@ -26,6 +26,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/components/providers/auth-provider';
 import { useCreateWorkspace } from '@/hooks/use-workspace';
 import { useCurrentWorkspace } from '@/hooks/use-current-workspace';
+import { useIsAdmin } from '@/hooks/use-permissions';
 
 interface WorkspaceSwitcherProps {
   className?: string;
@@ -35,6 +36,7 @@ export function WorkspaceSwitcher({ className }: WorkspaceSwitcherProps) {
   const { user } = useAuth();
   const { currentWorkspace, currentWorkspaceId, workspaces, isLoading, setCurrentWorkspaceId } = useCurrentWorkspace();
   const createWorkspace = useCreateWorkspace();
+  const isAdmin = useIsAdmin();
 
   const [open, setOpen] = React.useState(false);
   const [dialogOpen, setDialogOpen] = React.useState(false);
@@ -104,16 +106,18 @@ export function WorkspaceSwitcher({ className }: WorkspaceSwitcherProps) {
             </DropdownMenuItem>
           ))}
           <DropdownMenuSeparator />
-          <DropdownMenuItem
-            onSelect={() => {
-              setOpen(false);
-              setDialogOpen(true);
-            }}
-            className="cursor-pointer"
-          >
-            <PlusCircle className="mr-2 h-4 w-4" />
-            Create Workspace
-          </DropdownMenuItem>
+          {isAdmin && (
+            <DropdownMenuItem
+              onSelect={() => {
+                setOpen(false);
+                setDialogOpen(true);
+              }}
+              className="cursor-pointer"
+            >
+              <PlusCircle className="mr-2 h-4 w-4" />
+              Create Workspace
+            </DropdownMenuItem>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
 

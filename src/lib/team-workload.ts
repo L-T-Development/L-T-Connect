@@ -21,26 +21,33 @@ export interface WorkloadSummary {
 
 export function calculateTeamWorkload(
   tasks: Task[],
-  members: Array<{ $id: string; name: string; email: string }>,
+  members: Array<{ $id: string; userId?: string; name: string; email: string }>,
   startDate: Date,
   endDate: Date
 ): WorkloadSummary {
-  const memberWorkloads: TeamMemberWorkload[] = members.map(member => {
+  const memberWorkloads: TeamMemberWorkload[] = members.map((member) => {
+    // Use userId if available (workspace_members), otherwise fall back to $id
+    const memberId = member.userId || member.$id;
+
     // Filter tasks assigned to this member
-    const memberTasks = tasks.filter(task => 
-      task.assigneeIds.includes(member.$id) &&
-      task.status !== 'DONE'
-    );
+    // Check both assigneeIds and assignedTo for compatibility
+    const memberTasks = tasks.filter((task) => {
+      const assigneeIds = task.assigneeIds || [];
+      const assignedTo = task.assignedTo || [];
+      return (
+        (assigneeIds.includes(memberId) || assignedTo.includes(memberId)) && task.status !== 'DONE'
+      );
+    });
 
     // Calculate tasks by day
     const tasksByDay: Record<string, Task[]> = {};
     const currentDate = new Date(startDate);
-    
+
     while (currentDate <= endDate) {
       const dateKey = format(currentDate, 'yyyy-MM-dd');
-      
+
       // Tasks due on this date or overdue
-      const tasksForDay = memberTasks.filter(task => {
+      const tasksForDay = memberTasks.filter((task) => {
         if (!task.dueDate) return false;
         const taskDueDate = parseISO(task.dueDate);
         return taskDueDate <= currentDate && task.status !== 'DONE';
@@ -51,17 +58,23 @@ export function calculateTeamWorkload(
     }
 
     // Calculate workload metrics
-    const activeTasks = memberTasks.filter(t => t.status === 'TODO' || t.status === 'REVIEW').length;
-    const completedTasks = tasks.filter(t => 
-      t.assigneeIds.includes(member.$id) && t.status === 'DONE'
+    const activeTasks = memberTasks.filter(
+      (t) => t.status === 'TODO' || t.status === 'REVIEW'
     ).length;
+    const completedTasks = tasks.filter((t) => {
+      const assigneeIds = t.assigneeIds || [];
+      const assignedTo = t.assignedTo || [];
+      return (
+        (assigneeIds.includes(memberId) || assignedTo.includes(memberId)) && t.status === 'DONE'
+      );
+    }).length;
 
     // Use task count as a lightweight workload metric (10 tasks => 100%)
     const totalTasks = memberTasks.length;
     const workloadPercentage = (totalTasks / 10) * 100;
 
     return {
-      userId: member.$id,
+      userId: memberId,
       userName: member.name,
       userEmail: member.email,
       totalTasks,
@@ -73,9 +86,12 @@ export function calculateTeamWorkload(
   });
 
   const totalTasks = memberWorkloads.reduce((sum, m) => sum + m.totalTasks, 0);
-  const averageWorkload = members.length > 0
-    ? Math.round(memberWorkloads.reduce((sum, m) => sum + m.workloadPercentage, 0) / members.length)
-    : 0;
+  const averageWorkload =
+    members.length > 0
+      ? Math.round(
+          memberWorkloads.reduce((sum, m) => sum + m.workloadPercentage, 0) / members.length
+        )
+      : 0;
 
   return {
     members: memberWorkloads,
